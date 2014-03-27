@@ -45,30 +45,36 @@ class OffsetGetter(zkClient: ZkClient) extends Logging {
   }
 
   private def processPartition(group: String, topic: String, pid: Int): Option[OffsetInfo] = {
-    val (offset, stat: Stat) = ZkUtils.readData(zkClient, s"${ZkUtils.ConsumersPath}/$group/offsets/$topic/$pid")
-    val (owner, _) = ZkUtils.readDataMaybeNull(zkClient, s"${ZkUtils.ConsumersPath}/$group/owners/$topic/$pid")
+    try {
+      val (offset, stat: Stat) = ZkUtils.readData(zkClient, s"${ZkUtils.ConsumersPath}/$group/offsets/$topic/$pid")
+      val (owner, _) = ZkUtils.readDataMaybeNull(zkClient, s"${ZkUtils.ConsumersPath}/$group/owners/$topic/$pid")
 
-    ZkUtils.getLeaderForPartition(zkClient, topic, pid) match {
-      case Some(bid) =>
-        val consumerOpt = consumerMap.getOrElseUpdate(bid, getConsumer(bid))
-        consumerOpt map {
-          consumer =>
-            val topicAndPartition = TopicAndPartition(topic, pid)
-            val request =
-              OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
-            val logSize = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
+      ZkUtils.getLeaderForPartition(zkClient, topic, pid) match {
+        case Some(bid) =>
+          val consumerOpt = consumerMap.getOrElseUpdate(bid, getConsumer(bid))
+          consumerOpt map {
+            consumer =>
+              val topicAndPartition = TopicAndPartition(topic, pid)
+              val request =
+                OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
+              val logSize = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
 
-            OffsetInfo(group = group,
-              topic = topic,
-              partition = pid,
-              offset = offset.toLong,
-              logSize = logSize,
-              owner = owner,
-              creation = Time.fromMilliseconds(stat.getCtime),
-              modified = Time.fromMilliseconds(stat.getMtime))
-        }
-      case None =>
-        error("No broker for partition %s - %s".format(topic, pid))
+              OffsetInfo(group = group,
+                topic = topic,
+                partition = pid,
+                offset = offset.toLong,
+                logSize = logSize,
+                owner = owner,
+                creation = Time.fromMilliseconds(stat.getCtime),
+                modified = Time.fromMilliseconds(stat.getMtime))
+          }
+        case None =>
+          error("No broker for partition %s - %s".format(topic, pid))
+          None
+      }
+    } catch {
+      case t: Throwable =>
+        error(s"Could not parse partition info. group: [$group] topic: [$topic]", t)
         None
     }
   }
