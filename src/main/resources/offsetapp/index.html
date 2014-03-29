@@ -12,6 +12,7 @@
     <!-- Bootstrap core CSS -->
     <link href="http:////netdna.bootstrapcdn.com/bootswatch/3.0.3/slate/bootstrap.min.css" rel="stylesheet">
     <link href="./style.css" rel="stylesheet">
+    <link href="./css/cluster-viz.css" rel="stylesheet">
 
     <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.9/angular.js"></script>
 	<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.9/angular-route.js"></script>
@@ -29,6 +30,12 @@
 
     <div class="container">
 
+        <a href="/"/>Home</a> |
+        <a href="/#/"/>Consumer Groups</a> |
+        <a href="/#/topics"/>Topic List</a> |
+        <a href="/#/clusterviz"/>Cluster Viz</a> |
+        <a href="/#/activetopicsviz"/>Active Topics Viz</a>
+
 	  <div ng-view></div>
 
     </div><!-- /.container -->
@@ -43,8 +50,10 @@
 	<script src="http://code.highcharts.com/stock/highstock.js"></script>
 	<script src="http://code.highcharts.com/stock/modules/exporting.js"></script>
 	<script src="http://cdnjs.cloudflare.com/ajax/libs/lodash.js/2.4.1/lodash.min.js"></script>
+    <script src="http://d3js.org/d3.v3.min.js"></script>
 	<script src="./scripts/directives.js"></script>
 	<script src="./scripts/controllers.js"></script>
 	<script src="./scripts/app.js"></script>
+	<script src="./scripts/cluster-viz.js"></script>
   </body>
 </html>

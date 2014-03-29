@@ -17,6 +17,11 @@ import org.apache.zookeeper.data.Stat
  * User: pierre
  * Date: 1/22/14
  */
+
+case class Node(name: String, children: Seq[Node] = Seq())
+case class TopicDetails(consumers: Seq[ConsumerDetail])
+case class ConsumerDetail(name: String)
+
 class OffsetGetter(zkClient: ZkClient) extends Logging {
 
   private val consumerMap: mutable.Map[Int, Option[SimpleConsumer]] = mutable.Map()
@@ -121,6 +126,67 @@ class OffsetGetter(zkClient: ZkClient) extends Logging {
 
   def getGroups: Seq[String] = {
     ZkUtils.getChildren(zkClient, ZkUtils.ConsumersPath)
+  }
+
+
+  /**
+   * returns details for a given topic such as the active consumers pulling off of it
+   * @param topic
+   * @return
+   */
+  def getTopicDetail(topic: String): TopicDetails = {
+    val topicMap = getActiveTopicMap
+
+    if(topicMap.contains(topic)) {
+      TopicDetails(topicMap(topic).map(consumer => {
+        ConsumerDetail(consumer.toString)
+      }).toSeq)
+    } else {
+      TopicDetails(Seq(ConsumerDetail("Unable to find Active Consumers")))
+    }
+  }
+
+  def getTopics: Seq[String] = {
+    ZkUtils.getChildren(zkClient, ZkUtils.BrokerTopicsPath).sortWith(_ < _)
+  }
+
+
+  /**
+   * returns a map of active topics-> list of consumers from zookeeper, ones that have IDS attached to them
+   *
+   * @return
+   */
+  def getActiveTopicMap: Map[String, Seq[String]] = {
+    val topicMap: mutable.Map[String, Seq[String]] = mutable.Map()
+
+    ZkUtils.getChildren(zkClient, ZkUtils.ConsumersPath).foreach(group => {
+      ZkUtils.getConsumersPerTopic(zkClient, group).keySet.foreach(key => {
+        if (!topicMap.contains(key)) {
+          topicMap.put(key, Seq(group))
+        } else {
+          topicMap.put(key, topicMap(key) :+ group)
+        }
+      })
+    })
+    topicMap.toMap
+  }
+
+  def getActiveTopics: Node = {
+    val topicMap = getActiveTopicMap
+
+    Node("ActiveTopics", topicMap.map {
+      case (s: String, ss: Seq[String]) => {
+        Node(s, ss.map(consumer => Node(consumer)))
+
+      }
+    }.toSeq)
+  }
+
+  def getClusterViz: Node = {
+    val clusterNodes = ZkUtils.getAllBrokersInCluster(zkClient).map((broker) => {
+        Node(broker.getConnectionString(), Seq())
+    })
+    Node("KafkaCluster", clusterNodes)
   }
 
   def close() {

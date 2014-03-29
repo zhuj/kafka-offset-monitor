@@ -13,6 +13,22 @@ var app = angular.module('offsetapp',
                                                          .when("/group/:group/:topic", {
                                                              templateUrl: "views/topic.html",
                                                              controller: "TopicCtrl"
+                                                         })
+                                                         .when("/clusterviz", {
+                                                              templateUrl: "views/cluster-viz.html",
+                                                              controller: "ClusterVizCtrl"
+                                                         })
+                                                         .when("/activetopicsviz", {
+                                                               templateUrl: "views/activetopics-viz.html",
+                                                               controller: "ActiveTopicsVizCtrl"
+                                                          })
+                                                         .when("/topics", {
+                                                              templateUrl: "views/topiclist.html",
+                                                              controller: "TopicListCtrl"
+                                                          })
+                                                         .when("/topicdetail/:group", {
+                                                              templateUrl: "views/topic-detail.html",
+                                                              controller: "TopicDetailCtrl"
                                                          });;
                                                  });
 
@@ -48,7 +64,11 @@ angular.module("offsetapp.services", ["ngResource"])
 			getGroup: function(group, cb) {
 				return $resource("./group/:group").get({group:group}, groupPartitions(cb));
 			},
+			topicDetail: function(group, cb) {
+            	return $resource("./topicdetails/:group").get({group:group}, groupPartitions(cb));
+            },
 			listGroup: function() {return $http.get("./group");},
+			listTopics: function() {return $http.get("./topiclist");},
 			getTopic: function(group, topic, cb) {
 				return $resource("./group/:group/:topic").get({group:group, topic: topic}, groupPartitions(cb));
 			}
