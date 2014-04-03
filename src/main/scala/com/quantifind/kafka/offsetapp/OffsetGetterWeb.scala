@@ -17,7 +17,6 @@ import com.quantifind.kafka.OffsetGetter
 import com.quantifind.sumac.validation.Required
 import com.twitter.util.Time
 import net.liftweb.json.JsonAST.JInt
-import scala.collection.mutable
 
 class OWArgs extends OffsetGetterArgs with UnfilteredWebApp.Arguments {
   @Required

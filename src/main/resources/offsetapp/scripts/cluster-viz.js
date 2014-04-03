@@ -1,7 +1,8 @@
 function loadViz(load_to_id, data_path) {
 
+
     var m = [0, 120, 0, 120],
-        w = 1280 - m[1] - m[3],
+        w = 1400 - m[1] - m[3],
         h = 500 - m[0] - m[2],
         i = 0,
         root;
@@ -19,27 +20,34 @@ function loadViz(load_to_id, data_path) {
         .append("svg:g")
         .attr("transform", "translate(" + m[3] + "," + m[0] + ")");
 
-    d3.json(data_path, function(json) {
-        root = json;
-        root.x0 = h / 2;
-        root.y0 = 0;
+    var xhr = d3.json(data_path)
+        .on("progress", function() {
 
-        function toggleAll(nodZ) {
-            if (nodZ.children) {
-                nodZ.children.forEach(toggleAll);
-                toggle(nodZ);
-            }
-        }
+         })
+        .on("load", function(json) {
 
+               root = json;
+               root.x0 = h / 2;
+               root.y0 = 0;
 
+               function toggleAll(nodZ) {
+                   if (nodZ.children) {
+                       nodZ.children.forEach(toggleAll);
+                       toggle(nodZ);
+                   }
+               }
 
-        updateClusterViz(root, tree, vis, diagonal);
-    });
+               updateClusterViz(root, tree, vis, diagonal);
+               $( ".alert-info" ).hide("slow");
+
+         })
+        .on("error", function(error) { try { console.log("failure!", error); } catch(err){} })
+        .get();
 }
 
 function updateClusterViz(source, tree, vis, diagonal) {
      var m = [0, 120, 0, 120],
-            w = 1280 - m[1] - m[3],
+            w = 1400 - m[1] - m[3],
             h = 800 - m[0] - m[2],
             i = 0;
 
@@ -49,8 +57,9 @@ function updateClusterViz(source, tree, vis, diagonal) {
     // Compute the new tree layout.
     var nodes = tree.nodes(source).reverse();
 
+
     // Normalize for fixed-depth.
-    nodes.forEach(function(d) { d.y = d.depth * 180; });
+    nodes.forEach(function(d) { d.y = d.depth * 300; });
 
     // Update the nodes…
     var node = vis.selectAll("g.node")
@@ -60,7 +69,7 @@ function updateClusterViz(source, tree, vis, diagonal) {
     var nodeEnter = node.enter().append("svg:g")
         .attr("class", "node")
         .attr("transform", function(d) { return "translate(" + source.y0 + "," + source.x0 + ")"; })
-        .on("click", function(d) { load_viz_page(d.name, d.parent.name); });
+        .on("click", function(d) { load_viz_page(d); });
 
     nodeEnter.append("svg:circle")
         .attr("r", 1e-6)
@@ -134,9 +143,13 @@ function updateClusterViz(source, tree, vis, diagonal) {
     });
 }
 
-function load_viz_page(id, parent) {
-    if(parent != "ActiveTopics" && parent != "KafkaCluster") {
-        window.location.replace("/#/group/"+ id + "/" + parent);
+function load_viz_page(d) {
+    name = d.name
+    if(d.parent != undefined) {
+        parent = d.parent.name;
+        if(parent != undefined && parent != "ActiveTopics" && parent != "KafkaCluster") {
+            window.location.replace("/#/group/"+ name + "/" + parent);
+        }
     }
 }
 

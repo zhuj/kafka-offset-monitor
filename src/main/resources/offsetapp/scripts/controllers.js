@@ -35,18 +35,18 @@ angular.module('offsetapp.controllers',["offsetapp.services"])
 
     								  $scope.group = $routeParams.group;
     							  }])
-    .controller("ClusterVizCtrl", ["$scope", "offsetinfo",
-       								  function($scope, offsetinfo) {
-       									// no op
-       									$scope.loading = true;
-       									loadViz("#kafka-cluster", "/clusterlist")
-       								  }])
-    .controller("ActiveTopicsVizCtrl", ["$scope", "offsetinfo",
-                                          function($scope, offsetinfo) {
-                                            // no op
-                                            $scope.loading = true;
-                                            loadViz("#kafka-cluster", "/activetopics")
-                                          }])
+    .controller("ClusterVizCtrl", ["$scope", "$interval", "$routeParams", "offsetinfo",
+       							  function($scope, $interval, $routeParams, offsetinfo) {
+                                     $scope.loading = true;
+                                     offsetinfo.loadClusterViz($routeParams.group, function(d) {
+                                    });
+       							  }])
+    .controller("ActiveTopicsVizCtrl", ["$scope", "$interval", "$routeParams", "offsetinfo",
+                                  function($scope, $interval, $routeParams, offsetinfo) {
+                                      $scope.loading = true;
+                                      offsetinfo.loadTopicConsumerViz($routeParams.group, function(d) {
+                                     });
+                                  }])
 	.controller("TopicCtrl", ["$scope", "$routeParams", "offsetinfo",
 							  function($scope, $routeParams, offsetinfo) {
 								  $scope.group = $routeParams.group;
