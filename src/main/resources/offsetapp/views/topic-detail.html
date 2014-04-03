@@ -23,7 +23,14 @@
 	</thead>
 	<tbody>
       <tr ng-repeat="b in info.consumers">
-		<td><a href="./#/group/{{b.name}}/{{group}}">{{b.name}}</a></td>
+
+          <td ng-if="b.name == 'Unable to find Active Consumers'">
+              {{b.name}}
+          </td>
+          <td ng-if="b.name != 'Unable to find Active Consumers'">
+              <a href="./#/group/{{b.name}}/{{group}}">{{b.name}}</a>
+          </td>
+
       </tr>
 	</tbody>
   </table>
