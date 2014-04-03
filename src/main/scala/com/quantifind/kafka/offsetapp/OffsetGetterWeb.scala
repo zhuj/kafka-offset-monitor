@@ -99,6 +99,21 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
     _.getGroups
   }
 
+  def getActiveTopics(args: OWArgs) = withOG(args) {
+    _.getActiveTopics
+  }
+  def getTopics(args: OWArgs) = withOG(args) {
+    _.getTopics
+  }
+
+  def getTopicDetail(topic: String, args: OWArgs) = withOG(args) {
+    _.getTopicDetail(topic)
+  }
+
+  def getClusterViz(args: OWArgs) = withOG(args) {
+    _.getClusterViz
+  }
+
   override def afterStop() {
     timer.cancel()
     timer.purge()
@@ -129,6 +144,14 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
       case GET(Path(Seg("group" :: group :: topic :: Nil))) =>
         val offsets = args.db.offsetHistory(group, topic)
         JsonContent ~> ResponseString(write(offsets)) ~> Ok
+      case GET(Path(Seg("topiclist" :: Nil))) =>
+        JsonContent ~> ResponseString(write(getTopics(args)))
+      case GET(Path(Seg("clusterlist" :: Nil))) =>
+        JsonContent ~> ResponseString(write(getClusterViz(args)))
+      case GET(Path(Seg("topicdetails" :: group :: Nil))) =>
+        JsonContent ~> ResponseString(write(getTopicDetail(group, args)))
+      case GET(Path(Seg("activetopics" :: Nil))) =>
+        JsonContent ~> ResponseString(write(getActiveTopics(args)))
     }
   }
 }

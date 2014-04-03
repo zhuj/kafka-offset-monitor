@@ -12,6 +12,7 @@
     <!-- Bootstrap core CSS -->
     <link href="http:////netdna.bootstrapcdn.com/bootswatch/3.0.3/slate/bootstrap.min.css" rel="stylesheet">
     <link href="./style.css" rel="stylesheet">
+    <link href="./css/cluster-viz.css" rel="stylesheet">
 
     <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.9/angular.js"></script>
 	<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.9/angular-route.js"></script>
@@ -26,7 +27,35 @@
   </head>
 
   <body>
+      <nav class="navbar navbar-default" role="navigation">
+          <div class="container-fluid">
+              <!-- Brand and toggle get grouped for better mobile display -->
+              <div class="navbar-header">
+                  <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1">
+                      <span class="sr-only">Toggle navigation</span>
+                      <span class="icon-bar"></span>
+                      <span class="icon-bar"></span>
+                      <span class="icon-bar"></span>
+                  </button>
+                  <a class="navbar-brand" href="#">KafkaMonitor</a>
+              </div>
 
+              <!-- Collect the nav links, forms, and other content for toggling -->
+              <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+                  <ul class="nav navbar-nav">
+                      <li><a href="#">Consumer Groups</a></li>
+                      <li><a href="/#/topics">Topic List</a></li>
+                      <li class="dropdown">
+                          <a  href="javascript:void(0)"  class="dropdown-toggle" data-toggle="dropdown">Visualizations <b class="caret"></b></a>
+                          <ul class="dropdown-menu">
+                              <li><a href="/#/activetopicsviz">Active Topic Consumers</a></li>
+                              <li><a href="/#/clusterviz">Cluster Overview</a></li>
+                          </ul>
+                      </li>
+                  </ul>
+              </div><!-- /.navbar-collapse -->
+          </div><!-- /.container-fluid -->
+      </nav>
     <div class="container">
 
 	  <div ng-view></div>
@@ -43,8 +72,10 @@
 	<script src="http://code.highcharts.com/stock/highstock.js"></script>
 	<script src="http://code.highcharts.com/stock/modules/exporting.js"></script>
 	<script src="http://cdnjs.cloudflare.com/ajax/libs/lodash.js/2.4.1/lodash.min.js"></script>
+    <script src="./scripts/d3.v3.min.js"></script>
 	<script src="./scripts/directives.js"></script>
 	<script src="./scripts/controllers.js"></script>
 	<script src="./scripts/app.js"></script>
+	<script src="./scripts/cluster-viz.js"></script>
   </body>
 </html>

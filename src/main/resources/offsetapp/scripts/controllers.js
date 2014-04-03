@@ -17,6 +17,36 @@ angular.module('offsetapp.controllers',["offsetapp.services"])
 										  $scope.groups = d;
 									  });
 								  }])
+    .controller("TopicListCtrl", ["$scope", "offsetinfo",
+                                  function($scope, offsetinfo) {
+                                      $scope.loading = true;
+                                      offsetinfo.listTopics().success(function(d) {
+                                          $scope.loading=false;
+                                          $scope.topics = d;
+                                      });
+                                  }])
+	.controller("TopicDetailCtrl", ["$scope", "$interval", "$routeParams", "offsetinfo",
+    							  function($scope, $interval, $routeParams, offsetinfo) {
+    								  offsetinfo.topicDetail($routeParams.group, function(d) {
+    									  $scope.info = d;
+    									  $scope.loading=false;
+    								  });
+    								  $scope.loading=true;
+
+    								  $scope.group = $routeParams.group;
+    							  }])
+    .controller("ClusterVizCtrl", ["$scope", "$interval", "$routeParams", "offsetinfo",
+       							  function($scope, $interval, $routeParams, offsetinfo) {
+                                     $scope.loading = true;
+                                     offsetinfo.loadClusterViz($routeParams.group, function(d) {
+                                    });
+       							  }])
+    .controller("ActiveTopicsVizCtrl", ["$scope", "$interval", "$routeParams", "offsetinfo",
+                                  function($scope, $interval, $routeParams, offsetinfo) {
+                                      $scope.loading = true;
+                                      offsetinfo.loadTopicConsumerViz($routeParams.group, function(d) {
+                                     });
+                                  }])
 	.controller("TopicCtrl", ["$scope", "$routeParams", "offsetinfo",
 							  function($scope, $routeParams, offsetinfo) {
 								  $scope.group = $routeParams.group;
