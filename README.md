@@ -1,6 +1,8 @@
 Kafka Offset Monitor
 ===========
 
+[![Build Status](https://travis-ci.org/quantifind/KafkaOffsetMonitor.svg?branch=master)](https://travis-ci.org/quantifind/KafkaOffsetMonitor)
+
 This is an app to monitor your kafka consumers and their position (offset) in the queue.
 
 You can see the current consumer groups, for each group the topics that they are consuming and the position of the group in each topic queue. This is useful to understand how quick you are consuming from a queue and how fast the queue is growing. It allows for debuging kafka producers and consumers or just to have an idea of what is going on in  your system.
