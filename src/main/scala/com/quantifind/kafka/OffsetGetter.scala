@@ -11,6 +11,7 @@ import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNoNodeException
 import com.twitter.util.Time
 import org.apache.zookeeper.data.Stat
+import scala.util.control.NonFatal
 
 /**
  * a nicer version of kafka's ConsumerOffsetChecker tool
@@ -19,7 +20,9 @@ import org.apache.zookeeper.data.Stat
  */
 
 case class Node(name: String, children: Seq[Node] = Seq())
+
 case class TopicDetails(consumers: Seq[ConsumerDetail])
+
 case class ConsumerDetail(name: String)
 
 class OffsetGetter(zkClient: ZkClient) extends Logging {
@@ -78,7 +81,7 @@ class OffsetGetter(zkClient: ZkClient) extends Logging {
           None
       }
     } catch {
-      case t: Throwable =>
+      case NonFatal(t) =>
         error(s"Could not parse partition info. group: [$group] topic: [$topic]", t)
         None
     }
@@ -125,7 +128,13 @@ class OffsetGetter(zkClient: ZkClient) extends Logging {
   }
 
   def getGroups: Seq[String] = {
-    ZkUtils.getChildren(zkClient, ZkUtils.ConsumersPath)
+    try {
+      ZkUtils.getChildren(zkClient, ZkUtils.ConsumersPath)
+    } catch {
+      case NonFatal(t) =>
+        error(s"could not get groups because of ${t.getMessage}", t)
+        Seq()
+    }
   }
 
 
@@ -137,7 +146,7 @@ class OffsetGetter(zkClient: ZkClient) extends Logging {
   def getTopicDetail(topic: String): TopicDetails = {
     val topicMap = getActiveTopicMap
 
-    if(topicMap.contains(topic)) {
+    if (topicMap.contains(topic)) {
       TopicDetails(topicMap(topic).map(consumer => {
         ConsumerDetail(consumer.toString)
       }).toSeq)
@@ -147,7 +156,14 @@ class OffsetGetter(zkClient: ZkClient) extends Logging {
   }
 
   def getTopics: Seq[String] = {
-    ZkUtils.getChildren(zkClient, ZkUtils.BrokerTopicsPath).sortWith(_ < _)
+    try {
+      ZkUtils.getChildren(zkClient, ZkUtils.BrokerTopicsPath).sortWith(_ < _)
+    } catch {
+      case NonFatal(t) =>
+        error(s"could not get topics because of ${t.getMessage}", t)
+        Seq()
+
+    }
   }
 
 
@@ -157,18 +173,28 @@ class OffsetGetter(zkClient: ZkClient) extends Logging {
    * @return
    */
   def getActiveTopicMap: Map[String, Seq[String]] = {
-    val topicMap: mutable.Map[String, Seq[String]] = mutable.Map()
-
-    ZkUtils.getChildren(zkClient, ZkUtils.ConsumersPath).foreach(group => {
-      ZkUtils.getConsumersPerTopic(zkClient, group).keySet.foreach(key => {
-        if (!topicMap.contains(key)) {
-          topicMap.put(key, Seq(group))
-        } else {
-          topicMap.put(key, topicMap(key) :+ group)
-        }
-      })
-    })
-    topicMap.toMap
+    try {
+      ZkUtils.getChildren(zkClient, ZkUtils.ConsumersPath).flatMap {
+        group =>
+          try {
+            ZkUtils.getConsumersPerTopic(zkClient, group).keySet.map {
+              key =>
+                key -> group
+            }
+          } catch {
+            case NonFatal(t) =>
+              error(s"could not get consumers for group $group", t)
+              Seq()
+          }
+      }.groupBy(_._1).mapValues {
+        case (_, groups: Seq[String]) =>
+          groups
+      }
+    } catch {
+      case NonFatal(t) =>
+        error(s"could not get topic maps because of ${t.getMessage}", t)
+        Map()
+    }
   }
 
   def getActiveTopics: Node = {
@@ -184,7 +210,7 @@ class OffsetGetter(zkClient: ZkClient) extends Logging {
 
   def getClusterViz: Node = {
     val clusterNodes = ZkUtils.getAllBrokersInCluster(zkClient).map((broker) => {
-        Node(broker.getConnectionString(), Seq())
+      Node(broker.getConnectionString(), Seq())
     })
     Node("KafkaCluster", clusterNodes)
   }
