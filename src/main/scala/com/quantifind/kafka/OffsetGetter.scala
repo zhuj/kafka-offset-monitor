@@ -187,8 +187,7 @@ class OffsetGetter(zkClient: ZkClient) extends Logging {
               Seq()
           }
       }.groupBy(_._1).mapValues {
-        case (_, groups: Seq[String]) =>
-          groups
+        _.unzip._2
       }
     } catch {
       case NonFatal(t) =>
