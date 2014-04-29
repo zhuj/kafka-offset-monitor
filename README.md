@@ -29,7 +29,7 @@ History of Topic position
 Running It
 ===========
 
-If you do not want to build it manually, just download the [current jar](http://quantifind.github.io/KafkaOffsetMonitor/dist/KafkaOffsetMonitor-assembly-0.1.0-SNAPSHOT.jar).
+If you do not want to build it manually, just download the [current jar](https://github.com/quantifind/KafkaOffsetMonitor/releases/latest).
 
 This is a small webapp, you can run it locally or on a server, as long as you have access to the ZooKeeper nodes controlling kafka.
 
