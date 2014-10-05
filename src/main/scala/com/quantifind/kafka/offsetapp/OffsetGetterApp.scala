@@ -1,5 +1,7 @@
 package com.quantifind.kafka.offsetapp
 
+import java.text.NumberFormat
+
 import com.quantifind.kafka.OffsetGetter.OffsetInfo
 
 import scala.concurrent.duration._
@@ -20,6 +22,8 @@ class OffsetGetterArgsWGT extends OffsetGetterArgs {
 
   var onlyOffsets: Boolean = false
 
+  // if you want your lag results formatted with thousands separator
+  var formatLagOutput = false
 }
 
 class OffsetGetterArgs extends FieldArgs {
@@ -65,7 +69,8 @@ object OffsetGetterApp extends ArgMain[OffsetGetterArgsWGT] {
                     case ((offAcc, logAcc, lagAcc), info) =>
                       (offAcc + info.offset, logAcc + info.logSize, lagAcc + info.lag)
                   }
-                  "%-15s\t%-40s\t%-15s\t%-15s\t%-15s".format(head.group, head.topic, offset, log, lag)
+                  val fmtedLag = if (args.formatLagOutput) NumberFormat.getIntegerInstance().format(lag) else lag
+                  "%-15s\t%-40s\t%-15s\t%-15s\t%-15s".format(head.group, head.topic, offset, log, fmtedLag)
                 }
             }.foreach(println)
         } else {
@@ -74,7 +79,8 @@ object OffsetGetterApp extends ArgMain[OffsetGetterArgsWGT] {
           }
           i.offsets.foreach {
             info =>
-              println("%-15s\t%-40s\t%-3s\t%-15s\t%-15s\t%-15s\t%s".format(info.group, info.topic, info.partition, info.offset, info.logSize, info.lag,
+              val fmtedLag = if (args.formatLagOutput) NumberFormat.getIntegerInstance().format(info.lag) else info.lag
+              println("%-15s\t%-40s\t%-3s\t%-15s\t%-15s\t%-15s\t%s".format(info.group, info.topic, info.partition, info.offset, info.logSize, fmtedLag,
                 info.owner.getOrElse("none")))
           }
         }
