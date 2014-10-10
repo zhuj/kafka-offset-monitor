@@ -101,7 +101,39 @@ angular.module("offsetapp.directives", [])
 							renderTo: $(element).find(".chart")[0]
 						},
 						rangeSelector: {
-							inputEnabled: false
+							inputEnabled: false,
+							buttons: [{
+								type: 'minute',
+								count: 1,
+								text: '1m'
+							}, {
+								type: 'minute',
+								count: 5,
+								text: '5m'
+							}, {
+								type: 'minute',
+								count: 15,
+								text: '15m'
+							}, {
+								type: 'hour',
+								count: 1,
+								text: '1h'
+							}, {
+								type: 'hour',
+								count: 12,
+								text: '12h'
+							}, {
+								type: 'day',
+								count: 1,
+								text: '1d'
+							}, {
+								type: 'day',
+								count: 5,
+								text: '5d'
+							}, {
+								type: 'all',
+								text: 'All'
+							}]
 						},
 						legend : {
 							borderRadius: 0,
