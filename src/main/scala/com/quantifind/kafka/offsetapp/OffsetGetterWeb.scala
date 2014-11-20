@@ -46,7 +46,7 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
       g =>
         val inf = getInfo(g, args).offsets.toIndexedSeq
         info(s"inserting ${inf.size}")
-        args.db.insetAll(inf)
+        args.db.insertAll(inf)
     }
   }
 

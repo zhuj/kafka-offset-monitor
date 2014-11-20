@@ -60,7 +60,7 @@ class OffsetDB(dbfile: String) {
     }
   }
 
-  def insetAll(info: IndexedSeq[OffsetInfo]) {
+  def insertAll(info: IndexedSeq[OffsetInfo]) {
     val now = System.currentTimeMillis
     database.withSession {
       implicit s =>
