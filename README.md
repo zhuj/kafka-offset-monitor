@@ -54,7 +54,7 @@ The arguments are:
 Contributing
 ============
 
-The KafkaOffsetMonitor is released under the Apache License and is **welcomes any contributions** within this license. Any pull request is welcome and will be reviewed and merged as quickly as possible.
+The KafkaOffsetMonitor is released under the Apache License and we **welcome any contributions** within this license. Any pull request is welcome and will be reviewed and merged as quickly as possible.
 
 Because this open source tool is released by [Quantifind](http://www.quantifind.com) as a company, if you want to submit a pull request, you will have to sign the following simple contributors agreement:
 - If you are an individual, please sign [this contributors agreement](https://docs.google.com/a/quantifind.com/document/d/1RS7qEjq3cCmJ1665UhoCMK8541Ms7KyU3kVFoO4CR_I/) and send it back to contributors@quantifind.com
