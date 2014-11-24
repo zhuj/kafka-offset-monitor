@@ -62,7 +62,7 @@ class OffsetDB(dbfile: String) {
 
   def insertAll(info: IndexedSeq[OffsetInfo]) {
     val now = System.currentTimeMillis
-    database.withSession {
+    database.withTransaction {
       implicit s =>
         offsets ++= info.map(i => DbOffsetInfo(timestamp = now, offset = i))
     }
