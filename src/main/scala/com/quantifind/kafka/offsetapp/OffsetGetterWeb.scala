@@ -1,11 +1,14 @@
 package com.quantifind.kafka.offsetapp
 
+import java.sql.SQLException
 import java.util.{Timer, TimerTask}
+
+import com.quantifind.utils.Utils.retry
 
 import scala.concurrent.duration._
 
 import com.quantifind.kafka.OffsetGetter.KafkaInfo
-import com.quantifind.utils.UnfilteredWebApp
+import com.quantifind.utils.{Utils, UnfilteredWebApp}
 import kafka.utils.{Logging, ZKStringSerializer}
 import net.liftweb.json.{CustomSerializer, NoTypeHints, Serialization}
 import net.liftweb.json.Serialization.write
@@ -17,6 +20,8 @@ import com.quantifind.kafka.OffsetGetter
 import com.quantifind.sumac.validation.Required
 import com.twitter.util.Time
 import net.liftweb.json.JsonAST.JInt
+
+import scala.util.control.NonFatal
 
 class OWArgs extends OffsetGetterArgs with UnfilteredWebApp.Arguments {
   @Required
@@ -46,19 +51,30 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
       g =>
         val inf = getInfo(g, args).offsets.toIndexedSeq
         info(s"inserting ${inf.size}")
-        args.db.insetAll(inf)
+        args.db.insertAll(inf)
     }
   }
 
   def schedule(args: OWArgs) {
+    def retryTask[T](fn: => T) {
+      try {
+        retry(3) {
+          fn
+        }
+      } catch {
+        case NonFatal(e) =>
+          error("Failed to run scheduled task", e)
+      }
+    }
+
     timer.scheduleAtFixedRate(new TimerTask() {
       override def run() {
-        writeToDb(args)
+        retryTask(writeToDb(args))
       }
     }, 0, args.refresh.toMillis)
     timer.scheduleAtFixedRate(new TimerTask() {
       override def run() {
-        args.db.emptyOld(System.currentTimeMillis - args.retain.toMillis)
+        retryTask(args.db.emptyOld(System.currentTimeMillis - args.retain.toMillis))
       }
     }, args.retain.toMillis, args.retain.toMillis)
   }
