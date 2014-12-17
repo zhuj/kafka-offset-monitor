@@ -44,6 +44,7 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
   def htmlRoot: String = "/offsetapp"
 
   val timer = new Timer()
+  var zkClient: ZkClient = null
 
   def writeToDb(args: OWArgs) {
     val groups = getGroups(args)
@@ -79,32 +80,14 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
     }, args.retain.toMillis, args.retain.toMillis)
   }
 
-
-  def withZK[T](args: OWArgs)(f: ZkClient => T): T = {
-    var zkClient: ZkClient = null
+  def withOG[T](args: OWArgs)(f: OffsetGetter => T): T = {
+    var og: OffsetGetter = null
     try {
-      zkClient = new ZkClient(args.zk,
-        args.zkSessionTimeout.toMillis.toInt,
-        args.zkConnectionTimeout.toMillis.toInt,
-        ZKStringSerializer)
-      f(zkClient)
+      og = new OffsetGetter(zkClient)
+      f(og)
     } finally {
-      if (zkClient != null)
-        zkClient.close()
+      if (og != null) og.close()
     }
-
-  }
-
-  def withOG[T](args: OWArgs)(f: OffsetGetter => T): T = withZK(args) {
-    zk =>
-
-      var og: OffsetGetter = null
-      try {
-        og = new OffsetGetter(zk)
-        f(og)
-      } finally {
-        if (og != null) og.close()
-      }
   }
 
   def getInfo(group: String, args: OWArgs): KafkaInfo = withOG(args) {
@@ -133,6 +116,8 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
   override def afterStop() {
     timer.cancel()
     timer.purge()
+    if (zkClient != null)
+      zkClient.close()
   }
 
   class TimeSerializer extends CustomSerializer[Time](format => (
@@ -149,6 +134,9 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
   override def setup(args: OWArgs): Plan = new Plan {
     implicit val formats = Serialization.formats(NoTypeHints) + new TimeSerializer
     args.db.maybeCreate()
+    zkClient = new ZkClient(args.zk,  args.zkSessionTimeout.toMillis.toInt,
+                                      args.zkConnectionTimeout.toMillis.toInt,
+                                      ZKStringSerializer)
     schedule(args)
 
     def intent: Plan.Intent = {
