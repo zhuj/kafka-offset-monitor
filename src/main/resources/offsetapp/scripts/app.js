@@ -68,10 +68,10 @@ angular.module("offsetapp.services", ["ngResource"])
             	return $resource("./topicdetails/:group").get({group:group}, groupPartitions(cb));
             },
             loadClusterViz: function(group, cb) {
-                cb(loadViz("#dataviz-container", "/clusterlist"))
+                cb(loadViz("#dataviz-container", "./clusterlist"))
             },
             loadTopicConsumerViz: function(group, cb) {
-                cb(loadViz("#dataviz-container", "/activetopics"))
+                cb(loadViz("#dataviz-container", "./activetopics"))
             },
 			listGroup: function() {return $http.get("./group");},
 			listTopics: function() {return $http.get("./topiclist");},
