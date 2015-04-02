@@ -23,6 +23,8 @@ case class Node(name: String, children: Seq[Node] = Seq())
 
 case class TopicDetails(consumers: Seq[ConsumerDetail])
 
+case class TopicAndConsumersDetails(consumers: Seq[KafkaInfo])
+
 case class ConsumerDetail(name: String)
 
 class OffsetGetter(zkClient: ZkClient) extends Logging {
@@ -122,6 +124,7 @@ class OffsetGetter(zkClient: ZkClient) extends Logging {
     val off = offsetInfo(group, topics)
     val brok = brokerInfo()
     KafkaInfo(
+      name = group,
       brokers = brok.toSeq,
       offsets = off
     )
@@ -152,6 +155,23 @@ class OffsetGetter(zkClient: ZkClient) extends Logging {
       }).toSeq)
     } else {
       TopicDetails(Seq(ConsumerDetail("Unable to find Active Consumers")))
+    }
+  }
+
+  /**
+   * returns details for a given topic such as the active consumers pulling off of it
+   * and for each of the active consumers it will return the consumer data
+   *
+   * @param topic
+   * @return
+   */
+  def getTopicAndConsumersDetail(topic: String): TopicAndConsumersDetails = {
+    val topicMap = getActiveTopicMap
+
+    if (topicMap.contains(topic)) {
+      TopicAndConsumersDetails(topicMap(topic).map(getInfo(_, Seq(topic))))
+    } else {
+      TopicAndConsumersDetails(Seq())
     }
   }
 
@@ -227,7 +247,7 @@ class OffsetGetter(zkClient: ZkClient) extends Logging {
 
 object OffsetGetter {
 
-  case class KafkaInfo(brokers: Seq[BrokerInfo], offsets: Seq[OffsetInfo])
+  case class KafkaInfo(name: String, brokers: Seq[BrokerInfo], offsets: Seq[OffsetInfo])
 
   case class BrokerInfo(id: Int, host: String, port: Int)
 
