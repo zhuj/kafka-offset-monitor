@@ -26,7 +26,7 @@ var app = angular.module('offsetapp',
                                                               templateUrl: "views/topiclist.html",
                                                               controller: "TopicListCtrl"
                                                           })
-                                                         .when("/topic/:group", {
+                                                         .when("/topicdetail/:group", {
                                                               templateUrl: "views/topic-detail.html",
                                                               controller: "TopicDetailCtrl"
                                                          });;
@@ -65,7 +65,7 @@ angular.module("offsetapp.services", ["ngResource"])
 				return $resource("./group/:group").get({group:group}, groupPartitions(cb));
 			},
 			topicDetail: function(group, cb) {
-            	return $resource("./topic/:group").get({group:group}, groupPartitions(cb));
+            	return $resource("./topicdetails/:group").get({group:group}, groupPartitions(cb));
             },
             loadClusterViz: function(group, cb) {
                 cb(loadViz("#dataviz-container", "./clusterlist"))

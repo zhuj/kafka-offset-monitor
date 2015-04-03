@@ -159,11 +159,8 @@ class OffsetGetter(zkClient: ZkClient) extends Logging {
   }
 
   /**
-   * returns details for a given topic such as the active consumers pulling off of it
+   * Returns details for a given topic such as the active consumers pulling off of it
    * and for each of the active consumers it will return the consumer data
-   *
-   * @param topic
-   * @return
    */
   def getTopicAndConsumersDetail(topic: String): TopicAndConsumersDetails = {
     val topicMap = getActiveTopicMap
