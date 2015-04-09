@@ -29,43 +29,61 @@ var app = angular.module('offsetapp',
                                                          .when("/topicdetail/:group", {
                                                               templateUrl: "views/topic-detail.html",
                                                               controller: "TopicDetailCtrl"
+                                                          })
+                                                         .when("/topic/:group/consumers", {
+                                                              templateUrl: "views/topic-consumers.html",
+                                                              controller: "TopicConsumersCtrl"
                                                          });;
                                                  });
 
 angular.module("offsetapp.services", ["ngResource"])
 	.factory("offsetinfo", ["$resource", "$http", function($resource, $http) {
-		function groupPartitions(cb) {
+		function processConsumer(cb) {
 			return function(data) {
-				var groups = _(data.offsets).groupBy(function(p) {
-					var t = p.timestamp;
-					if(!t) t = 0;
-					return p.group+p.topic+t.toString();
-				});
-				groups = groups.values().map(function(partitions) {
-					return {
-						group: partitions[0].group,
-						topic: partitions[0].topic,
-						partitions: partitions,
-						logSize: _(partitions).pluck("logSize").reduce(function(sum, num) {
-							return sum + num;
-						}),
-						offset: _(partitions).pluck("offset").reduce(function(sum, num) {
-							return sum + num;
-						}),
-						timestamp: partitions[0].timestamp
-					};
-				}).value();
-				data.offsets = groups;
+				data.offsets = groupPartitions(data.offsets);
+				cb(data);
+			}
+		}
+
+		function processMultipleConsumers(cb) {
+			return function(data) {
+				_(data.consumers).forEach(function(consumer) {consumer.offsets = groupPartitions(consumer.offsets);});
 				cb(data);
 			};
 		}
 
+		function groupPartitions(data) {
+			var groups = _(data).groupBy(function(p) {
+				var t = p.timestamp;
+				if(!t) t = 0;
+				return p.group+p.topic+t.toString();
+			});
+			groups = groups.values().map(function(partitions) {
+				return {
+					group: partitions[0].group,
+					topic: partitions[0].topic,
+					partitions: partitions,
+					logSize: _(partitions).pluck("logSize").reduce(function(sum, num) {
+						return sum + num;
+					}),
+					offset: _(partitions).pluck("offset").reduce(function(sum, num) {
+						return sum + num;
+					}),
+					timestamp: partitions[0].timestamp
+				};
+			}).value();
+			return groups;
+		}
+
 		return {
 			getGroup: function(group, cb) {
-				return $resource("./group/:group").get({group:group}, groupPartitions(cb));
+				return $resource("./group/:group").get({group:group}, processConsumer(cb));
 			},
 			topicDetail: function(group, cb) {
-            	return $resource("./topicdetails/:group").get({group:group}, groupPartitions(cb));
+            	return $resource("./topicdetails/:group").get({group:group}, processConsumer(cb));
+            },
+			topicConsumers: function(group, cb) {
+            	return $resource("./topic/:group/consumer").get({group:group}, processMultipleConsumers(cb));
             },
             loadClusterViz: function(group, cb) {
                 cb(loadViz("#dataviz-container", "./clusterlist"))
@@ -76,7 +94,7 @@ angular.module("offsetapp.services", ["ngResource"])
 			listGroup: function() {return $http.get("./group");},
 			listTopics: function() {return $http.get("./topiclist");},
 			getTopic: function(group, topic, cb) {
-				return $resource("./group/:group/:topic").get({group:group, topic: topic}, groupPartitions(cb));
+				return $resource("./group/:group/:topic").get({group:group, topic: topic}, processConsumer(cb));
 			}
 		};
 	}]);
