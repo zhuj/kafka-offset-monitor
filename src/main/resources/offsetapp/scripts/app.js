@@ -47,7 +47,8 @@ angular.module("offsetapp.services", ["ngResource"])
 
 		function processMultipleConsumers(cb) {
 			return function(data) {
-				_(data.consumers).forEach(function(consumer) {consumer.offsets = groupPartitions(consumer.offsets);});
+				_(data.consumers.active).forEach(function(consumer) {consumer.offsets = groupPartitions(consumer.offsets);});
+				_(data.consumers.inactive).forEach(function(consumer) {consumer.offsets = groupPartitions(consumer.offsets);});
 				cb(data);
 			};
 		}
