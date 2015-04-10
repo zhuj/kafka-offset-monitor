@@ -27,23 +27,23 @@ angular.module('offsetapp.controllers',["offsetapp.services"])
                                   }])
 	.controller("TopicDetailCtrl", ["$scope", "$interval", "$routeParams", "offsetinfo",
     							  function($scope, $interval, $routeParams, offsetinfo) {
-    								  offsetinfo.topicDetail($routeParams.group, function(d) {
+    								  offsetinfo.topicDetail($routeParams.topic, function(d) {
     									  $scope.info = d;
     									  $scope.loading=false;
     								  });
     								  $scope.loading=true;
 
-    								  $scope.group = $routeParams.group;
+    								  $scope.topic = $routeParams.topic;
     							  }])
   .controller("TopicConsumersCtrl", ["$scope", "$interval", "$routeParams", "offsetinfo",
                     function($scope, $interval, $routeParams, offsetinfo) {
-                      offsetinfo.topicConsumers($routeParams.group, function(d) {
+                      offsetinfo.topicConsumers($routeParams.topic, function(d) {
                         $scope.info = d;
                         $scope.loading=false;
                       });
                       $scope.loading=true;
 
-                      $scope.group = $routeParams.group;
+                      $scope.topic = $routeParams.topic;
                     }])
     .controller("ClusterVizCtrl", ["$scope", "$interval", "$routeParams", "offsetinfo",
        							  function($scope, $interval, $routeParams, offsetinfo) {

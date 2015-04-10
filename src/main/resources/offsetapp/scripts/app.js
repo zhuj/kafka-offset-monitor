@@ -26,11 +26,11 @@ var app = angular.module('offsetapp',
                                                               templateUrl: "views/topiclist.html",
                                                               controller: "TopicListCtrl"
                                                           })
-                                                         .when("/topicdetail/:group", {
+                                                         .when("/topicdetail/:topic", {
                                                               templateUrl: "views/topic-detail.html",
                                                               controller: "TopicDetailCtrl"
                                                           })
-                                                         .when("/topic/:group/consumers", {
+                                                         .when("/topic/:topic/consumers", {
                                                               templateUrl: "views/topic-consumers.html",
                                                               controller: "TopicConsumersCtrl"
                                                          });;
@@ -79,11 +79,11 @@ angular.module("offsetapp.services", ["ngResource"])
 			getGroup: function(group, cb) {
 				return $resource("./group/:group").get({group:group}, processConsumer(cb));
 			},
-			topicDetail: function(group, cb) {
-            	return $resource("./topicdetails/:group").get({group:group}, cb);
+			topicDetail: function(topic, cb) {
+            	return $resource("./topicdetails/:topic").get({topic:topic}, cb);
             },
-			topicConsumers: function(group, cb) {
-            	return $resource("./topic/:group/consumer").get({group:group}, processMultipleConsumers(cb));
+			topicConsumers: function(topic, cb) {
+            	return $resource("./topic/:topic/consumer").get({topic:topic}, processMultipleConsumers(cb));
             },
             loadClusterViz: function(group, cb) {
                 cb(loadViz("#dataviz-container", "./clusterlist"))
