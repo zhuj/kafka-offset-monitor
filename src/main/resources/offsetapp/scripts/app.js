@@ -80,7 +80,7 @@ angular.module("offsetapp.services", ["ngResource"])
 				return $resource("./group/:group").get({group:group}, processConsumer(cb));
 			},
 			topicDetail: function(group, cb) {
-            	return $resource("./topicdetails/:group").get({group:group}, processConsumer(cb));
+            	return $resource("./topicdetails/:group").get({group:group}, cb);
             },
 			topicConsumers: function(group, cb) {
             	return $resource("./topic/:group/consumer").get({group:group}, processMultipleConsumers(cb));
