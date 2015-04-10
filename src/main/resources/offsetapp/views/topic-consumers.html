@@ -35,7 +35,12 @@
 	</tbody>
   </table>
 
-  <a class="btn btn-default" href="#/topic/{{group}}/consumers" role="button">More details...</a>
+  <h2>Consumer details</h2>
+
+  <div ng-repeat="info in info.consumers">
+    <div ng-include="'views/includes/group.inc.html'"></div>
+  </div>
+
   <hr/>
 
 </div>
