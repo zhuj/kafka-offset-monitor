@@ -35,6 +35,16 @@ angular.module('offsetapp.controllers',["offsetapp.services"])
 
     								  $scope.group = $routeParams.group;
     							  }])
+  .controller("TopicConsumersCtrl", ["$scope", "$interval", "$routeParams", "offsetinfo",
+                    function($scope, $interval, $routeParams, offsetinfo) {
+                      offsetinfo.topicConsumers($routeParams.group, function(d) {
+                        $scope.info = d;
+                        $scope.loading=false;
+                      });
+                      $scope.loading=true;
+
+                      $scope.group = $routeParams.group;
+                    }])
     .controller("ClusterVizCtrl", ["$scope", "$interval", "$routeParams", "offsetinfo",
        							  function($scope, $interval, $routeParams, offsetinfo) {
                                      $scope.loading = true;

@@ -158,7 +158,7 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
         JsonContent ~> ResponseString(write(getClusterViz(args)))
       case GET(Path(Seg("topicdetails" :: topic :: Nil))) =>
         JsonContent ~> ResponseString(write(getTopicDetail(topic, args)))
-      case GET(Path(Seg("topic" :: topic :: "consumers" :: Nil))) =>
+      case GET(Path(Seg("topic" :: topic :: "consumer" :: Nil))) =>
         JsonContent ~> ResponseString(write(getTopicAndConsumersDetail(topic, args)))
       case GET(Path(Seg("activetopics" :: Nil))) =>
         JsonContent ~> ResponseString(write(getActiveTopics(args)))
