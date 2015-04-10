@@ -1,10 +1,10 @@
 <div class="page-header">
-  <h1>Details for the topic </strong>{{group}}</strong></h1>
+  <h1>Details for the topic </strong>{{topic}}</strong></h1>
 </div>
 
 <ol class="breadcrumb">
   <li><a href="#/">Topic Details</a></li>
-  <li class="active">{{group}}</li>
+  <li class="active">{{topic}}</li>
 </ol>
 
 <div class="alert alert-info" ng-show="loading">
@@ -18,29 +18,40 @@
 	<thead>
       <tr>
 		<th>name</th>
-
       </tr>
 	</thead>
 	<tbody>
-      <tr ng-repeat="b in info.consumers">
-
-          <td ng-if="b.name == 'Unable to find Active Consumers'">
-              {{b.name}}
+      <tr ng-repeat="c in info.consumers.active">
+          <td>
+              {{c.name}}
           </td>
-          <td ng-if="b.name != 'Unable to find Active Consumers'">
-              <a href="./#/group/{{b.name}}/{{group}}">{{b.name}}</a>
-          </td>
-
+      </tr>
+      <tr ng-show="info.consumers.active.length == 0">
+          <td>Unable to find Active Consumers</td>
       </tr>
 	</tbody>
   </table>
 
-  <h2>Consumer details</h2>
-
-  <div ng-repeat="info in info.consumers">
-    <div ng-include="'views/includes/group.inc.html'"></div>
+  <h2>Active Consumer Offsets</h2>
+  <div ng-repeat="info in info.consumers.active">
+    <div ng-include="'views/includes/group.inc.html'">
+    </div>
+  </div>
+  <div ng-show="info.consumers.active.length == 0">
+    Unable to find Active Consumers
   </div>
 
+  <hr/>
+
+  <h2>Inactive Consumer Offsets</h2>
+  <div ng-repeat="info in info.consumers.inactive">
+    <div ng-include="'views/includes/group.inc.html'">
+    </div>
+  </div>
+  <div ng-show="info.consumers.inactive.length == 0">
+    Unable to find Inactive Consumers
+  </div>
+  
   <hr/>
 
 </div>
