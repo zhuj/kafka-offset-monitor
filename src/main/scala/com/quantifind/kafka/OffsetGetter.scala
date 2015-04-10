@@ -21,7 +21,7 @@ import scala.util.control.NonFatal
 
 case class Node(name: String, children: Seq[Node] = Seq())
 
-case class TopicDetails(active: Seq[ConsumerDetail], inactive: Seq[ConsumerDetail])
+case class TopicDetails(consumers: Seq[ConsumerDetail])
 case class TopicDetailsWrapper(consumers: TopicDetails)
 
 case class TopicAndConsumersDetails(active: Seq[KafkaInfo], inactive: Seq[KafkaInfo])
@@ -148,25 +148,16 @@ class OffsetGetter(zkClient: ZkClient) extends Logging {
   /**
    * Returns details for a given topic such as the consumers pulling off of it
    */
-  def getTopicDetail(topic: String): TopicDetailsWrapper = {
-    val topicMap = getTopicMap
-    val activeTopicMap = getActiveTopicMap
+  def getTopicDetail(topic: String): TopicDetails = {
+    val topicMap = getActiveTopicMap
 
-    val activeConsumers = if (activeTopicMap.contains(topic)) {
-      mapConsumerDetails(activeTopicMap(topic))
+    if (topicMap.contains(topic)) {
+      TopicDetails(topicMap(topic).map(consumer => {
+        ConsumerDetail(consumer.toString)
+      }).toSeq)
     } else {
-      Seq(ConsumerDetail("Unable to find Active Consumers"))
+      TopicDetails(Seq(ConsumerDetail("Unable to find Active Consumers")))
     }
-
-    val inactiveConsumers = if (!activeTopicMap.contains(topic) && topicMap.contains(topic)) {
-      mapConsumerDetails(topicMap(topic))
-    } else if (activeTopicMap.contains(topic) && topicMap.contains(topic)) {
-      mapConsumerDetails(topicMap(topic).diff(activeTopicMap(topic)))
-    } else {
-      Seq(ConsumerDetail("Unable to find Inactive Consumers"))
-    }
-
-    TopicDetailsWrapper(TopicDetails(activeConsumers, inactiveConsumers))
   }
 
   def mapConsumerDetails(consumers: Seq[String]): Seq[ConsumerDetail] =
