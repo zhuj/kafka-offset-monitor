@@ -36,7 +36,7 @@ object KafkaUtilsBuild extends Build {
   )
 
   def sharedSettings = Defaults.defaultSettings ++ assemblySettings ++ Seq(
-    version := "0.2.2-VDNA-1-snapshot",
+    version := "0.2.2-VDNA-1-SNAPSHOT",
     scalaVersion := "2.10.3",
     organization := "com.quantifind",
     scalacOptions := Seq("-deprecation", "-unchecked", "-optimize"),
