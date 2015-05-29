@@ -32,9 +32,9 @@ object KafkaUtilsBuild extends Build {
   def offsetmonSettings = sharedSettings ++ Seq(
     name := "KafkaOffsetMonitor",
     libraryDependencies ++= Seq(
-      "net.databinder" %% "unfiltered-filter" % "0.6.7",
-      "net.databinder" %% "unfiltered-jetty" % "0.6.7",
-      "net.databinder" %% "unfiltered-json" % "0.6.7",
+      "net.databinder" %% "unfiltered-filter" % "0.8.4",
+      "net.databinder" %% "unfiltered-jetty" % "0.8.4",
+      "net.databinder" %% "unfiltered-json4s" % "0.8.4",
       "com.quantifind" %% "sumac" % "0.3.0",
       "com.typesafe.slick" %% "slick" % "2.0.0",
       "org.xerial" % "sqlite-jdbc" % "3.7.2",
