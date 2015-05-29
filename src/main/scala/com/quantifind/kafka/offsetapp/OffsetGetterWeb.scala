@@ -1,6 +1,5 @@
 package com.quantifind.kafka.offsetapp
 
-import java.sql.SQLException
 import java.util.{Timer, TimerTask}
 
 import com.quantifind.utils.Utils.retry
@@ -8,10 +7,11 @@ import com.quantifind.utils.Utils.retry
 import scala.concurrent.duration._
 
 import com.quantifind.kafka.OffsetGetter.KafkaInfo
-import com.quantifind.utils.{Utils, UnfilteredWebApp}
+import com.quantifind.utils.UnfilteredWebApp
 import kafka.utils.{Logging, ZKStringSerializer}
-import net.liftweb.json.{CustomSerializer, NoTypeHints, Serialization}
-import net.liftweb.json.Serialization.write
+import org.json4s.{CustomSerializer, NoTypeHints}
+import org.json4s.native.Serialization
+import org.json4s.native.Serialization.write
 import org.I0Itec.zkclient.ZkClient
 import unfiltered.filter.Plan
 import unfiltered.request.{GET, Path, Seg}
@@ -19,7 +19,7 @@ import unfiltered.response.{JsonContent, Ok, ResponseString}
 import com.quantifind.kafka.OffsetGetter
 import com.quantifind.sumac.validation.Required
 import com.twitter.util.Time
-import net.liftweb.json.JsonAST.JInt
+import org.json4s.JInt
 
 import scala.util.control.NonFatal
 
