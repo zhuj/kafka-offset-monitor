@@ -5,38 +5,8 @@ import AssemblyKeys._
 
 object KafkaUtilsBuild extends Build {
 
-  val mavenPublishSettings : Seq[sbt.Project.Setting[_]] = Seq(
-    publishMavenStyle := true,
-    publishTo <<= isSnapshot {
-      (ss: Boolean) =>
-        val nexus = "https://maven.visualdna.com/nexus/"
-        if (ss)
-          Some("snapshots" at nexus + "content/repositories/snapshots")
-        else
-          Some("releases" at nexus + "content/repositories/releases")
-    },
-    credentials ++= {
-      val sonatype = ("Sonatype Nexus Repository Manager", "maven.visualdna.com")
-      def loadMavenCredentials(file: java.io.File): Seq[Credentials] = {
-        xml.XML.loadFile(file) \ "servers" \ "server" map (s => {
-          val host = (s \ "id").text
-          val realm = sonatype._1
-          val hostToUse = "maven.visualdna.com"
-          Credentials(realm, hostToUse, (s \ "username").text, (s \ "password").text)
-        })
-      }
-      val ivyCredentials = Path.userHome / ".ivy2" / ".credentials"
-      val mavenCredentials = Path.userHome / ".m2" / "settings.xml"
-      (ivyCredentials.asFile, mavenCredentials.asFile) match {
-        case (ivy, _) if ivy.canRead => Credentials(ivy) :: Nil
-        case (_, mvn) if mvn.canRead => loadMavenCredentials(mvn)
-        case _ => Nil
-      }
-    }
-  )
-
   def sharedSettings = Defaults.defaultSettings ++ assemblySettings ++ Seq(
-    version := "0.2.2.VDNA.2-SNAPSHOT",
+    version := "0.3.0-SNAPSHOT",
     scalaVersion := "2.10.3",
     organization := "com.quantifind",
     scalacOptions := Seq("-deprecation", "-unchecked", "-optimize"),
@@ -59,7 +29,7 @@ object KafkaUtilsBuild extends Build {
 
   lazy val offsetmonitor = Project("offsetmonitor", file("."), settings = offsetmonSettings)
 
-  def offsetmonSettings = sharedSettings ++ mavenPublishSettings ++ Seq(
+  def offsetmonSettings = sharedSettings ++ Seq(
     name := "KafkaOffsetMonitor",
     libraryDependencies ++= Seq(
       "net.databinder" %% "unfiltered-filter" % "0.8.4",
