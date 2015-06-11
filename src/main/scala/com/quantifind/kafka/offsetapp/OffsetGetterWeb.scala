@@ -109,6 +109,10 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
     _.getTopicDetail(topic)
   }
 
+  def getTopicAndConsumersDetail(topic: String, args: OWArgs) = withOG(args) {
+    _.getTopicAndConsumersDetail(topic)
+  }
+
   def getClusterViz(args: OWArgs) = withOG(args) {
     _.getClusterViz
   }
@@ -152,8 +156,10 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
         JsonContent ~> ResponseString(write(getTopics(args)))
       case GET(Path(Seg("clusterlist" :: Nil))) =>
         JsonContent ~> ResponseString(write(getClusterViz(args)))
-      case GET(Path(Seg("topicdetails" :: group :: Nil))) =>
-        JsonContent ~> ResponseString(write(getTopicDetail(group, args)))
+      case GET(Path(Seg("topicdetails" :: topic :: Nil))) =>
+        JsonContent ~> ResponseString(write(getTopicDetail(topic, args)))
+      case GET(Path(Seg("topic" :: topic :: "consumer" :: Nil))) =>
+        JsonContent ~> ResponseString(write(getTopicAndConsumersDetail(topic, args)))
       case GET(Path(Seg("activetopics" :: Nil))) =>
         JsonContent ~> ResponseString(write(getActiveTopics(args)))
     }
