@@ -30,6 +30,12 @@ object KafkaUtilsBuild extends Build {
   lazy val offsetmonitor = Project("offsetmonitor", file("."), settings = offsetmonSettings)
 
   def offsetmonSettings = sharedSettings ++ Seq(
+    mergeStrategy in assembly := {
+     case "about.html"                                => MergeStrategy.discard
+     case x =>
+		val oldStrategy = (mergeStrategy in assembly).value
+    		oldStrategy(x)
+	},
     name := "KafkaOffsetMonitor",
     libraryDependencies ++= Seq(
       "net.databinder" %% "unfiltered-filter" % "0.8.4",
