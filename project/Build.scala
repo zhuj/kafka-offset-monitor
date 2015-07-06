@@ -44,7 +44,8 @@ object KafkaUtilsBuild extends Build {
       "com.quantifind" %% "sumac" % "0.3.0",
       "com.typesafe.slick" %% "slick" % "2.0.0",
       "org.xerial" % "sqlite-jdbc" % "3.7.2",
-      "com.twitter" % "util-core" % "3.0.0"),
+      "com.twitter" % "util-core" % "3.0.0",
+      "org.reflections" % "reflections" % "0.9.10"),
     resolvers ++= Seq(
       "java m2" at "http://download.java.net/maven/2",
       "twitter repo" at "http://maven.twttr.com"))
