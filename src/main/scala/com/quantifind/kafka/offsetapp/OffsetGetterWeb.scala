@@ -1,7 +1,6 @@
 package com.quantifind.kafka.offsetapp
 
 import java.lang.reflect.Constructor
-import java.util
 import java.util.{Timer, TimerTask}
 
 import com.quantifind.kafka.offsetapp.sqlite.SQLiteOffsetInfoReporter
@@ -183,7 +182,7 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
 
     val reflections = new Reflections()
 
-    val reportersTypes: util.Set[Class[_ <: OffsetInfoReporter]] = reflections.getSubTypesOf(classOf[OffsetInfoReporter])
+    val reportersTypes: java.util.Set[Class[_ <: OffsetInfoReporter]] = reflections.getSubTypesOf(classOf[OffsetInfoReporter])
 
     val reportersSet: mutable.Set[Class[_ <: OffsetInfoReporter]] = scala.collection.JavaConversions.asScalaSet(reportersTypes)
 
