@@ -2,8 +2,6 @@ package com.quantifind.kafka.offsetapp
 
 import java.text.NumberFormat
 
-import com.quantifind.kafka.OffsetGetter.OffsetInfo
-
 import scala.concurrent.duration._
 
 import com.quantifind.sumac.{ ArgMain, FieldArgs }
