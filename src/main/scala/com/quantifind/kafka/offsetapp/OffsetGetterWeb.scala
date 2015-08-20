@@ -1,31 +1,28 @@
 package com.quantifind.kafka.offsetapp
 
 import java.lang.reflect.Constructor
-import java.util.concurrent.{TimeUnit, Executors, ScheduledExecutorService}
-import java.util.{Timer, TimerTask}
+import java.util.concurrent.{Executors, ScheduledExecutorService, TimeUnit}
 
-import com.quantifind.kafka.offsetapp.sqlite.SQLiteOffsetInfoReporter
-import com.quantifind.utils.Utils.retry
-import org.reflections.Reflections
-
-import scala.collection.mutable
-import scala.concurrent.duration._
-
+import com.quantifind.kafka.OffsetGetter
 import com.quantifind.kafka.OffsetGetter.KafkaInfo
+import com.quantifind.kafka.offsetapp.sqlite.SQLiteOffsetInfoReporter
+import com.quantifind.sumac.validation.Required
 import com.quantifind.utils.UnfilteredWebApp
-import kafka.utils.{Logging, ZKStringSerializer}
-import org.json4s.{CustomSerializer, NoTypeHints}
+import com.quantifind.utils.Utils.retry
+import com.twitter.util.Time
+import kafka.consumer.ConsumerConnector
+import kafka.utils.Logging
+import org.I0Itec.zkclient.ZkClient
 import org.json4s.native.Serialization
 import org.json4s.native.Serialization.write
-import org.I0Itec.zkclient.ZkClient
+import org.json4s.{CustomSerializer, JInt, NoTypeHints}
+import org.reflections.Reflections
 import unfiltered.filter.Plan
 import unfiltered.request.{GET, Path, Seg}
 import unfiltered.response.{JsonContent, Ok, ResponseString}
-import com.quantifind.kafka.OffsetGetter
-import com.quantifind.sumac.validation.Required
-import com.twitter.util.Time
-import org.json4s.JInt
 
+import scala.collection.mutable
+import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
 class OWArgs extends OffsetGetterArgs with UnfilteredWebApp.Arguments {
@@ -55,7 +52,6 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
 
   val  scheduler : ScheduledExecutorService = Executors.newScheduledThreadPool(2)
 
-  var zkClient: ZkClient = null
   var reporters: mutable.Set[OffsetInfoReporter] = null
 
   def retryTask[T](fn: => T) {
@@ -89,7 +85,7 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
   def withOG[T](args: OWArgs)(f: OffsetGetter => T): T = {
     var og: OffsetGetter = null
     try {
-      og = new OffsetGetter(zkClient)
+      og = OffsetGetter.getInstance(args)
       f(og)
     } finally {
       if (og != null) og.close()
@@ -126,9 +122,6 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
   override def afterStop() {
 
     scheduler.shutdown()
-
-    if (zkClient != null)
-      zkClient.close()
   }
 
   class TimeSerializer extends CustomSerializer[Time](format => (
@@ -145,9 +138,6 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
   override def setup(args: OWArgs): Plan = new Plan {
     implicit val formats = Serialization.formats(NoTypeHints) + new TimeSerializer
     args.db.maybeCreate()
-    zkClient = new ZkClient(args.zk,  args.zkSessionTimeout.toMillis.toInt,
-                                      args.zkConnectionTimeout.toMillis.toInt,
-                                      ZKStringSerializer)
 
     reporters = createOffsetInfoReporters(args)
 
