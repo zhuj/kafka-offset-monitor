@@ -1,14 +1,20 @@
 package com.quantifind.kafka.offsetapp
 
 import java.text.NumberFormat
+import java.util.Properties
 
+import com.quantifind.kafka.OffsetGetter
+import com.quantifind.kafka.core.ZKOffsetGetter
+import kafka.consumer.{ConsumerConnector, ConsumerConfig, Consumer}
 import scala.concurrent.duration._
 
 import com.quantifind.sumac.{ ArgMain, FieldArgs }
 import com.quantifind.sumac.validation.Required
+import com.quantifind.sumac.{ArgMain, FieldArgs}
 import kafka.utils.ZKStringSerializer
 import org.I0Itec.zkclient.ZkClient
-import com.quantifind.kafka.OffsetGetter
+
+import scala.concurrent.duration._
 
 class OffsetGetterArgsWGT extends OffsetGetterArgs {
   @Required
@@ -25,12 +31,18 @@ class OffsetGetterArgsWGT extends OffsetGetterArgs {
 }
 
 class OffsetGetterArgs extends FieldArgs {
+
+  var offsetStorage: String = "zookeeper"
+
+  var kafkaOffsetForceFromStart = false
+
+  var stormZKOffsetBase = "/stormconsumers"
+
   @Required
   var zk: String = _
 
   var zkSessionTimeout: Duration = 30 seconds
   var zkConnectionTimeout: Duration = 30 seconds
-
 }
 
 /**
@@ -41,14 +53,10 @@ class OffsetGetterArgs extends FieldArgs {
 object OffsetGetterApp extends ArgMain[OffsetGetterArgsWGT] {
 
   def main(args: OffsetGetterArgsWGT) {
-    var zkClient: ZkClient = null
     var og: OffsetGetter = null
     try {
-      zkClient = new ZkClient(args.zk,
-        args.zkSessionTimeout.toMillis.toInt,
-        args.zkConnectionTimeout.toMillis.toInt,
-        ZKStringSerializer)
-      og = new OffsetGetter(zkClient)
+      og = OffsetGetter.getInstance(args)
+
       val i = og.getInfo(args.group, args.topics)
 
       if (i.offsets.nonEmpty) {
@@ -97,8 +105,6 @@ object OffsetGetterApp extends ArgMain[OffsetGetterArgsWGT] {
 
     } finally {
       if (og != null) og.close()
-      if (zkClient != null)
-        zkClient.close()
     }
   }
 
