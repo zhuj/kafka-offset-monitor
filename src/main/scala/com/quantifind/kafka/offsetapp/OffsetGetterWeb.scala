@@ -23,6 +23,7 @@ import unfiltered.response.{JsonContent, Ok, ResponseString}
 
 import scala.collection.mutable
 import scala.concurrent.duration._
+import scala.language.implicitConversions
 import scala.util.control.NonFatal
 
 class OWArgs extends OffsetGetterArgs with UnfilteredWebApp.Arguments {

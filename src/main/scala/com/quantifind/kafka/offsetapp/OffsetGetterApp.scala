@@ -3,18 +3,18 @@ package com.quantifind.kafka.offsetapp
 import java.text.NumberFormat
 import java.util.Properties
 
+import scala.concurrent.duration._
+import scala.language.postfixOps
+
 import com.quantifind.kafka.OffsetGetter
 import com.quantifind.kafka.core.ZKOffsetGetter
-import kafka.consumer.{ConsumerConnector, ConsumerConfig, Consumer}
-import scala.concurrent.duration._
-
 import com.quantifind.sumac.{ ArgMain, FieldArgs }
 import com.quantifind.sumac.validation.Required
 import com.quantifind.sumac.{ArgMain, FieldArgs}
+import kafka.consumer.{ConsumerConnector, ConsumerConfig, Consumer}
 import kafka.utils.ZKStringSerializer
 import org.I0Itec.zkclient.ZkClient
 
-import scala.concurrent.duration._
 
 class OffsetGetterArgsWGT extends OffsetGetterArgs {
   @Required
