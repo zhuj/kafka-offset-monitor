@@ -3,17 +3,19 @@ package com.quantifind.kafka.offsetapp
 import java.text.NumberFormat
 import java.util.Properties
 
-import scala.concurrent.duration._
-import scala.language.postfixOps
-
 import com.quantifind.kafka.OffsetGetter
 import com.quantifind.kafka.core.ZKOffsetGetter
-import com.quantifind.sumac.{ ArgMain, FieldArgs }
-import com.quantifind.sumac.validation.Required
-import com.quantifind.sumac.{ArgMain, FieldArgs}
 import kafka.consumer.{ConsumerConnector, ConsumerConfig, Consumer}
 import kafka.utils.ZKStringSerializer
+
+
+import com.quantifind.sumac.{ArgMain, FieldArgs}
+import com.quantifind.sumac.validation.Required
+import com.quantifind.sumac.{ArgMain, FieldArgs}
+
 import org.I0Itec.zkclient.ZkClient
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 
 class OffsetGetterArgsWGT extends OffsetGetterArgs {
@@ -38,18 +40,23 @@ class OffsetGetterArgs extends FieldArgs {
 
   var stormZKOffsetBase = "/stormconsumers"
 
+  var kafkaBrokers: String = _
+
+  var kafkaSecurityProtocol = "PLAINTEXT"
+
   @Required
   var zk: String = _
 
   var zkSessionTimeout: Duration = 30 seconds
+
   var zkConnectionTimeout: Duration = 30 seconds
 }
 
 /**
- * TODO DOC
- * User: pierre
- * Date: 1/22/14
- */
+  * TODO DOC
+  * User: pierre
+  * Date: 1/22/14
+  */
 object OffsetGetterApp extends ArgMain[OffsetGetterArgsWGT] {
 
   def main(args: OffsetGetterArgsWGT) {
@@ -107,6 +114,4 @@ object OffsetGetterApp extends ArgMain[OffsetGetterArgsWGT] {
       if (og != null) og.close()
     }
   }
-
 }
-

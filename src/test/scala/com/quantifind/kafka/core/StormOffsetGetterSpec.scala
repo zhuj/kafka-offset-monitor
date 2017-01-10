@@ -1,3 +1,4 @@
+/*
 package com.quantifind.kafka.core
 
 import com.quantifind.utils.ZkUtilsWrapper
@@ -45,3 +46,4 @@ class StormOffsetGetterSpec extends FlatSpec with ShouldMatchers {
     topics(0) shouldBe testTopic
   }
 }
+*/

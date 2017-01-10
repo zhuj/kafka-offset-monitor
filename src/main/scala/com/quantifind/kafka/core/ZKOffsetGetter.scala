@@ -2,11 +2,10 @@ package com.quantifind.kafka.core
 
 import com.quantifind.kafka.OffsetGetter
 import OffsetGetter.OffsetInfo
-import com.quantifind.utils.ZkUtilsWrapper
 import com.twitter.util.Time
 import kafka.api.{OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.common.TopicAndPartition
-import org.I0Itec.zkclient.ZkClient
+import kafka.utils.ZkUtils
 import org.I0Itec.zkclient.exception.ZkNoNodeException
 import org.apache.zookeeper.data.Stat
 
@@ -18,16 +17,16 @@ import scala.util.control.NonFatal
  * User: pierre
  * Date: 1/22/14
  */
-class ZKOffsetGetter(theZkClient: ZkClient, zkUtils: ZkUtilsWrapper = new ZkUtilsWrapper) extends OffsetGetter {
+class ZKOffsetGetter(theZkUtils: ZkUtils) extends OffsetGetter {
 
-  override val zkClient = theZkClient
+  override val zkUtils = theZkUtils
 
   override def processPartition(group: String, topic: String, pid: Int): Option[OffsetInfo] = {
     try {
-      val (offset, stat: Stat) = zkUtils.readData(zkClient, s"${zkUtils.ConsumersPath}/$group/offsets/$topic/$pid")
-      val (owner, _) = zkUtils.readDataMaybeNull(zkClient, s"${zkUtils.ConsumersPath}/$group/owners/$topic/$pid")
+      val (offset, stat: Stat) = zkUtils.readData(s"${ZkUtils.ConsumersPath}/$group/offsets/$topic/$pid")
+      val (owner, _) = zkUtils.readDataMaybeNull(s"${ZkUtils.ConsumersPath}/$group/owners/$topic/$pid")
 
-      zkUtils.getLeaderForPartition(zkClient, topic, pid) match {
+      zkUtils.getLeaderForPartition(topic, pid) match {
         case Some(bid) =>
           val consumerOpt = consumerMap.getOrElseUpdate(bid, getConsumer(bid))
           consumerOpt map {
@@ -59,7 +58,7 @@ class ZKOffsetGetter(theZkClient: ZkClient, zkUtils: ZkUtilsWrapper = new ZkUtil
 
   override def getGroups: Seq[String] = {
     try {
-      zkUtils.getChildren(zkClient, zkUtils.ConsumersPath)
+      zkUtils.getChildren(ZkUtils.ConsumersPath)
     } catch {
       case NonFatal(t) =>
         error(s"could not get groups because of ${t.getMessage}", t)
@@ -69,7 +68,7 @@ class ZKOffsetGetter(theZkClient: ZkClient, zkUtils: ZkUtilsWrapper = new ZkUtil
 
   override def getTopicList(group: String): List[String] = {
     try {
-      zkUtils.getChildren(zkClient, s"${zkUtils.ConsumersPath}/$group/offsets").toList
+      zkUtils.getChildren(s"${ZkUtils.ConsumersPath}/$group/offsets").toList
     } catch {
       case _: ZkNoNodeException => List()
     }
@@ -80,7 +79,7 @@ class ZKOffsetGetter(theZkClient: ZkClient, zkUtils: ZkUtilsWrapper = new ZkUtil
    */
   override def getTopicMap: Map[String, Seq[String]] = {
     try {
-      zkUtils.getChildren(zkClient, zkUtils.ConsumersPath).flatMap {
+      zkUtils.getChildren(ZkUtils.ConsumersPath).flatMap {
         group => {
           getTopicList(group).map(topic => topic -> group)
         }
@@ -96,10 +95,10 @@ class ZKOffsetGetter(theZkClient: ZkClient, zkUtils: ZkUtilsWrapper = new ZkUtil
 
   override def getActiveTopicMap: Map[String, Seq[String]] = {
     try {
-      zkUtils.getChildren(zkClient, zkUtils.ConsumersPath).flatMap {
+      zkUtils.getChildren(ZkUtils.ConsumersPath).flatMap {
         group =>
           try {
-            zkUtils.getConsumersPerTopic(zkClient, group, true).keySet.map {
+            zkUtils.getConsumersPerTopic(group, true).keySet.map {
               key =>
                 key -> group
             }

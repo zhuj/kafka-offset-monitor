@@ -4,13 +4,14 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import com.quantifind.kafka.OffsetGetter.{BrokerInfo, KafkaInfo, OffsetInfo}
-import com.quantifind.kafka.core.{KafkaOffsetGetter, StormOffsetGetter, ZKOffsetGetter}
+import com.quantifind.kafka.core._
 import com.quantifind.kafka.offsetapp.OffsetGetterArgs
 import com.twitter.util.Time
 import kafka.common.BrokerNotAvailableException
 import kafka.consumer.{Consumer, ConsumerConfig, ConsumerConnector, SimpleConsumer}
-import kafka.utils.{Json, Logging, ZKStringSerializer, ZkUtils}
-import org.I0Itec.zkclient.ZkClient
+import kafka.utils.{Json, Logging, ZkUtils}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.common.security.JaasUtils
 
 import scala.collection._
 import scala.util.control.NonFatal
@@ -18,29 +19,36 @@ import scala.util.control.NonFatal
 case class Node(name: String, children: Seq[Node] = Seq())
 
 case class TopicDetails(consumers: Seq[ConsumerDetail])
+
 case class TopicDetailsWrapper(consumers: TopicDetails)
 
 case class TopicAndConsumersDetails(active: Seq[KafkaInfo], inactive: Seq[KafkaInfo])
+
 case class TopicAndConsumersDetailsWrapper(consumers: TopicAndConsumersDetails)
 
 case class ConsumerDetail(name: String)
 
-trait OffsetGetter  extends Logging {
+trait OffsetGetter extends Logging {
 
   val consumerMap: mutable.Map[Int, Option[SimpleConsumer]] = mutable.Map()
-  def zkClient: ZkClient
+
+  def zkUtils: ZkUtils
 
   //  kind of interface methods
   def getTopicList(group: String): List[String]
+
   def getGroups: Seq[String]
+
   def getTopicMap: Map[String, Seq[String]]
+
   def getActiveTopicMap: Map[String, Seq[String]]
+
   def processPartition(group: String, topic: String, pid: Int): Option[OffsetInfo]
 
   // get the Kafka simple consumer so that we can fetch broker offsets
   protected def getConsumer(bid: Int): Option[SimpleConsumer] = {
     try {
-      ZkUtils.readDataMaybeNull(zkClient, ZkUtils.BrokerIdsPath + "/" + bid) match {
+      zkUtils.readDataMaybeNull(ZkUtils.BrokerIdsPath + "/" + bid) match {
         case (Some(brokerInfoString), _) =>
           Json.parseFull(brokerInfoString) match {
             case Some(m) =>
@@ -62,7 +70,7 @@ trait OffsetGetter  extends Logging {
   }
 
   protected def processTopic(group: String, topic: String): Seq[OffsetInfo] = {
-    val pidMap = ZkUtils.getPartitionsForTopics(zkClient, Seq(topic))
+    val pidMap = zkUtils.getPartitionsForTopics(Seq(topic))
     for {
       partitions <- pidMap.get(topic).toSeq
       pid <- partitions.sorted
@@ -103,25 +111,24 @@ trait OffsetGetter  extends Logging {
   // get list of all topics
   def getTopics: Seq[String] = {
     try {
-      ZkUtils.getChildren(zkClient, ZkUtils.BrokerTopicsPath).sortWith(_ < _)
+      zkUtils.getChildren(ZkUtils.BrokerTopicsPath).sortWith(_ < _)
     } catch {
       case NonFatal(t) =>
         error(s"could not get topics because of ${t.getMessage}", t)
         Seq()
-
     }
   }
 
   def getClusterViz: Node = {
-    val clusterNodes = ZkUtils.getAllBrokersInCluster(zkClient).map((broker) => {
-      Node(broker.connectionString, Seq())
+    val clusterNodes = zkUtils.getAllBrokersInCluster().map((broker) => {
+      Node(broker.toString(), Seq())
     })
     Node("KafkaCluster", clusterNodes)
   }
 
   /**
-   * Returns details for a given topic such as the consumers pulling off of it
-   */
+    * Returns details for a given topic such as the consumers pulling off of it
+    */
   def getTopicDetail(topic: String): TopicDetails = {
     val topicMap = getActiveTopicMap
 
@@ -138,17 +145,17 @@ trait OffsetGetter  extends Logging {
     consumers.map(consumer => ConsumerDetail(consumer.toString))
 
   /**
-   * Returns details for a given topic such as the active consumers pulling off of it
-   * and for each of the active consumers it will return the consumer data
-   */
+    * Returns details for a given topic such as the active consumers pulling off of it
+    * and for each of the active consumers it will return the consumer data
+    */
   def getTopicAndConsumersDetail(topic: String): TopicAndConsumersDetailsWrapper = {
     val topicMap = getTopicMap
     val activeTopicMap = getActiveTopicMap
 
     val activeConsumers = if (activeTopicMap.contains(topic)) {
-        mapConsumersToKafkaInfo(activeTopicMap(topic), topic)
+      mapConsumersToKafkaInfo(activeTopicMap(topic), topic)
     } else {
-        Seq()
+      Seq()
     }
 
     val inactiveConsumers = if (!activeTopicMap.contains(topic) && topicMap.contains(topic)) {
@@ -178,12 +185,15 @@ trait OffsetGetter  extends Logging {
   }
 
   def close() {
+    // TODO: What is going on here?  This code is broken
+    /*
     for (consumerOpt <- consumerMap.values) {
       consumerOpt match {
         case Some(consumer) => consumer.close()
         case None => // ignore
       }
     }
+    */
   }
 }
 
@@ -205,47 +215,39 @@ object OffsetGetter {
   }
 
   val kafkaOffsetListenerStarted: AtomicBoolean = new AtomicBoolean(false)
-  var zkClient: ZkClient = null
+  var zkUtils: ZkUtils = null
   var consumerConnector: ConsumerConnector = null
+  var newKafkaConsumer: KafkaConsumer[String, String] = null
 
-  def createZKClient(args: OffsetGetterArgs): ZkClient = {
-    new ZkClient(args.zk,
+  def createZkUtils(args: OffsetGetterArgs): ZkUtils = {
+    ZkUtils(args.zk,
       args.zkSessionTimeout.toMillis.toInt,
       args.zkConnectionTimeout.toMillis.toInt,
-      ZKStringSerializer)
-  }
-
-  def createKafkaConsumerConnector(args: OffsetGetterArgs): ConsumerConnector = {
-    val props: Properties = new Properties()
-    // we want to be unique
-    props.put("group.id", "KafkaOffsetMonitor-" + System.currentTimeMillis)
-    props.put("zookeeper.connect", args.zk)
-    // must enable it
-    props.put("exclude.internal.topics", "false")
-    // we don't want to commit any thing, will always start from latest
-    props.put("auto.commit.enable", "false")
-    props.put("auto.offset.reset", if (args.kafkaOffsetForceFromStart) "smallest" else "largest")
-
-    Consumer.create(new ConsumerConfig(props))
+      JaasUtils.isZkSecurityEnabled())
   }
 
   def getInstance(args: OffsetGetterArgs): OffsetGetter = {
 
     if (kafkaOffsetListenerStarted.compareAndSet(false, true)) {
-      zkClient = createZKClient(args)
-      if (args.offsetStorage.toLowerCase == "kafka") {
-        consumerConnector = createKafkaConsumerConnector(args)
-        KafkaOffsetGetter.startOffsetListener(consumerConnector)
+      zkUtils = createZkUtils(args)
+
+      args.offsetStorage.toLowerCase match {
+
+        case "kafka" =>
+          // Start threads which will collect topic/partition/offset/client data on a schedule
+          KafkaOffsetGetter.startAdminClient(args)
+          KafkaOffsetGetter.startTopicPartitionOffsetGetter(args)
+          KafkaOffsetGetter.startCommittedOffsetListener(args)
       }
     }
 
     args.offsetStorage.toLowerCase match {
       case "kafka" =>
-        new KafkaOffsetGetter(zkClient)
+        new KafkaOffsetGetter(zkUtils, args)
       case "storm" =>
-        new StormOffsetGetter(zkClient, args.stormZKOffsetBase)
+        new StormOffsetGetter(zkUtils, args.stormZKOffsetBase)
       case _ =>
-        new ZKOffsetGetter(zkClient)
+        new ZKOffsetGetter(zkUtils)
     }
   }
 }

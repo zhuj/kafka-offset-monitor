@@ -3,11 +3,11 @@ Kafka Offset Monitor
 
 [![Build Status](https://travis-ci.org/quantifind/KafkaOffsetMonitor.svg?branch=master)](https://travis-ci.org/quantifind/KafkaOffsetMonitor)
 
-This is an app to monitor your kafka consumers and their position (offset) in the queue.
+This is an app to monitor your kafka consumers and their position (offset) in the log.
 
-You can see the current consumer groups, for each group the topics that they are consuming and the position of the group in each topic queue. This is useful to understand how quick you are consuming from a queue and how fast the queue is growing. It allows for debuging kafka producers and consumers or just to have an idea of what is going on in  your system.
+You can see the current consumer groups, for each group the topics that they are consuming and the position of the group in each topic log. This is useful to understand how quick you are consuming from a log and how fast the log is growing. It allows for debuging kafka producers and consumers or just to have an idea of what is going on in your system.
 
-The app keeps an history of queue position and lag of the consumers so you can have an overview of what has happened in the last days.
+The app keeps a history of log position and lag of the consumers so you can have an overview of what has happened in the last days. The amount of history to keep is definable at runtime.
 
 Here are a few screenshots:
 
@@ -32,34 +32,51 @@ Offset Types
 Kafka is flexible on how the offsets are managed. Consumer can choose arbitrary storage and format to persist offsets.  KafkaOffsetMonitor currently 
 supports following popular storage formats
 
+* kafka built-in offset management API (based on broker metadata and Kafka's own internal __consumer_offsets topic)
 * zookeeper built-in high-level consumer (based on Zookeeper)
-* kafka built-in offset management API (based on Kafka internal topic)
 * Storm Kafka Spout (based on Zookeeper by default)
 
 Each runtime instance of KafkaOffsetMonitor can only support a single type of storage format.
+
+Building It
+===========
+
+The command below will build a fat-jar in the target/scala_${SCALA_VERSION} directory which can be run by following the command in the "Running It" section.
+
+```bash
+$ sbt clean assembly
+```
 
 Running It
 ===========
 
 If you do not want to build it manually, just download the [current jar](https://github.com/quantifind/KafkaOffsetMonitor/releases/latest).
 
-This is a small webapp, you can run it locally or on a server, as long as you have access to the ZooKeeper nodes controlling kafka.
+This is a small web app, you can run it locally or on a server, as long as you have access to the Kafka broker(s) and ZooKeeper nodes storing kafka data.
 
 ```
-java -cp KafkaOffsetMonitor-assembly-0.2.1.jar \
-     com.quantifind.kafka.offsetapp.OffsetGetterWeb \
-     --offsetStorage kafka
-     --zk zk-server1,zk-server2 \
-     --port 8080 \
+
+java -Djava.security.auth.login.config=conf/server-client-jaas.conf \
+	-cp KafkaOffsetMonitor-assembly-0.4.0.jar \
+       com.quantifind.kafka.offsetapp.OffsetGetterWeb \
+     --offsetStorage kafka \
+     --kafkaBrokers kafkabroker01:6667,kafkabroker02:6667 \
+     --kafkaSecurityProtocol SASL_PLAINTEXT \
+     --zk zkserver01,zkserver02 \
+     --port 8081 \
      --refresh 10.seconds \
-     --retain 2.days
+     --retain 2.days \
+     --dbName offsetapp_kafka
+
 ```
 
 The arguments are:
 
-- **offsetStorage** valid options are ''zookeeper'', ''kafka'' or ''storm''. Anything else falls back to ''zookeeper''
+- **offsetStorage** valid options are ''kafka'', ''zookeeper'', or ''storm''. Anything else falls back to ''zookeeper''
 - **zk** the ZooKeeper hosts
-- **port** on what port will the app be available
+- **kafkaBrokers** comma-separated list of Kafka broker hosts (ex. "host1:port,host2:port').  Required only when using offsetStorage "kafka".
+- **kafkaSecurityProtocol** security protocol to use when connecting to kafka brokers (default: ''PLAINTEXT'', optional: ''SASL_PLAINTEXT'')
+- **port** the port on which the app will be made available
 - **refresh** how often should the app refresh and store a point in the DB
 - **retain** how long should points be kept in the DB
 - **dbName** where to store the history (default 'offsetapp')
@@ -67,15 +84,18 @@ The arguments are:
 - **stormZKOffsetBase** only applies to ''storm'' format.  Change the offset storage base in zookeeper, default to ''/stormconsumers'' (see notes below)
 - **pluginsArgs** additional arguments used by extensions (see below)
 
-Special Notes on Kafka Format
-===============================
-With Kafka built-in offset management API, offsets are saved in an internal topic ''__consumer_offsets'' as ''commit'' messages. Because there is no place 
-to directly query existing consumers, KafkaOffsetMonitor needs to ''discover'' consumers by examining those ''commit'' messages.  If consumers are active, 
-KafkaOffsetMonitor could just listen to new ''commit'' messages and active consumers should be ''discovered'' after a short while.  If in case you want to 
-see the consumers without much load, you can use flag '''kafkaOffsetForceFromStart''' to scan all ''commit'' messages.
+Special Notes on Kafka Offset Storage
+======================================
+
+As of Kafka v0.9, Kafka's built-in offset management saves offsets in an internal topic ''__consumer_offsets'' as ''commit''
+messages. Throughout running, we request a list of consumers from Kafka brokers which returns a list of all consumers
+Kafka has ever seen. Because there is no place to directly query for ''active'' consumers, KafkaOffsetMonitor needs to
+''discover'' active consumers by reading those ''commit'' messages. If consumers are active, KafkaOffsetMonitor will
+read ''commit'' messages from those active consumers and they will be ''discovered'' after a short while.
 
 Special Notes on Storm Storage
 ===============================
+
 By default, Storm Kafka Spout stores offsets in ZK in a directory specified via ''SpoutConfig''. At same time, Kafka also stores its meta-data inside zookeeper. 
 In order to monitor Storm Kafka Spout offsets, KafkaOffsetMonitor requires that:
  
@@ -108,7 +128,7 @@ Assuming you have a custom implementation of OffsetInfoReporter in a jar file, r
 ```
 java -cp KafkaOffsetMonitor-assembly-0.3.0.jar:kafka-offset-monitor-another-db-reporter.jar \
      com.quantifind.kafka.offsetapp.OffsetGetterWeb \
-     --zk zk-server1,zk-server2 \
+     --zk zkserver01,zkserver02 \
      --port 8080 \
      --refresh 10.seconds \
      --retain 2.days

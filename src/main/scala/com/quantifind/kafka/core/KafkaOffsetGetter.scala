@@ -1,68 +1,71 @@
 package com.quantifind.kafka.core
 
-import java.nio.ByteBuffer
-
 import com.quantifind.kafka.OffsetGetter
 import com.quantifind.kafka.OffsetGetter.OffsetInfo
-import com.quantifind.utils.ZkUtilsWrapper
+import com.quantifind.kafka.offsetapp.OffsetGetterArgs
+
+import java.nio.ByteBuffer
+import java.util.{Arrays, Properties}
+
 import com.twitter.util.Time
-import kafka.api.{OffsetRequest, PartitionOffsetRequestInfo}
+import kafka.admin.AdminClient
 import kafka.common.{OffsetAndMetadata, TopicAndPartition}
-import kafka.consumer.{ConsumerConnector, KafkaStream}
-import kafka.message.MessageAndMetadata
-import kafka.utils.{Logging}
-import org.I0Itec.zkclient.ZkClient
+import kafka.coordinator._
+import kafka.utils.{Logging, ZkUtils}
+import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, ConsumerRecords, KafkaConsumer}
+import org.apache.kafka.common.TopicPartition
 
 import scala.collection._
-import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.util.control.NonFatal
+import scala.concurrent.{Await, Future, duration}
 
-class KafkaOffsetGetter(theZkClient: ZkClient, zkUtils: ZkUtilsWrapper = new ZkUtilsWrapper) extends OffsetGetter {
+
+/**
+  * Created by rcasey on 11/16/2016.
+  */
+class KafkaOffsetGetter(theZkUtils: ZkUtils, args: OffsetGetterArgs) extends OffsetGetter {
+
   import KafkaOffsetGetter._
 
-  override val zkClient = theZkClient
+  override val zkUtils = theZkUtils
 
   override def processPartition(group: String, topic: String, pid: Int): Option[OffsetInfo] = {
-    try {
-      zkUtils.getLeaderForPartition(zkClient, topic, pid) match {
-        case Some(bid) =>
-          val consumerOpt = consumerMap.getOrElseUpdate(bid, getConsumer(bid))
-          consumerOpt flatMap { consumer =>
-              val topicAndPartition = TopicAndPartition(topic, pid)
-              offsetMap.get(GroupTopicPartition(group, topicAndPartition)) map { offsetMetaData =>
 
-                val request =
-                  OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
-                val logSize = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
+    val topicAndPartition = TopicAndPartition(topic, pid)
 
-                OffsetInfo(group = group,
-                  topic = topic,
-                  partition = pid,
-                  offset = offsetMetaData.offset,
-                  logSize = logSize,
-                  owner = Some("NA"),
-                  creation = Time.fromMilliseconds(offsetMetaData.timestamp),
-                  modified = Time.fromMilliseconds(offsetMetaData.timestamp))
-              }
-          }
-        case None =>
-          error("No broker for partition %s - %s".format(topic, pid))
-          None
-      }
-    } catch {
-      case NonFatal(t) =>
-        error(s"Could not parse partition info. group: [$group] topic: [$topic]", t)
-        None
+    committedOffsetMap.get(GroupTopicPartition(group, topicAndPartition)) map { offsetMetaData =>
+
+      // BIT O'HACK to deal with timing:
+      // Due to thread and processing timing, it is possible that the value we have for the topicPartition's
+      // logEndOffset has not yet been updated to match the value on the broker.  When this happens, report the
+      // topicPartition's logEndOffset as "committedOffset - lag", as the topicPartition's logEndOffset is *AT LEAST*
+      // this value
+      val logEndOffset: Option[Long] = topicPartitionOffsetsMap.get(topicAndPartition)
+      val committedOffset: Long = offsetMetaData.offset
+      val lag: Long = logEndOffset.get - committedOffset
+      val logEndOffsetReported: Long = if (lag < 0) committedOffset - lag else logEndOffset.get
+
+      val client: Option[ClientGroup] = Option(clients.filter(c => (c.group == group && c.topicPartitions.contains(topicAndPartition))).head)
+      val clientString: Option[String] = if (client.isDefined) Option(client.get.clientId + client.get.clientHost) else Option("NA")
+
+      OffsetInfo(group = group,
+        topic = topic,
+        partition = pid,
+        offset = committedOffset,
+        logSize = logEndOffsetReported,
+        owner = clientString,
+        creation = Time.fromMilliseconds(offsetMetaData.commitTimestamp),
+        modified = Time.fromMilliseconds(offsetMetaData.expireTimestamp))
     }
   }
 
   override def getGroups: Seq[String] = {
-    topicAndGroups.groupBy(_.group).keySet.toSeq
+    topicAndGroups.groupBy(_.group).keySet.toSeq.sorted
   }
 
   override def getTopicList(group: String): List[String] = {
-    topicAndGroups.filter(_.group == group).groupBy(_.topic).keySet.toList
+    topicAndGroups.filter(_.group == group).groupBy(_.topic).keySet.toList.sorted
   }
 
   override def getTopicMap: Map[String, scala.Seq[String]] = {
@@ -76,165 +79,267 @@ class KafkaOffsetGetter(theZkClient: ZkClient, zkUtils: ZkUtilsWrapper = new ZkU
 
 object KafkaOffsetGetter extends Logging {
 
-  val ConsumerOffsetTopic = "__consumer_offsets"
-
-  val offsetMap: mutable.Map[GroupTopicPartition, OffsetAndMetadata] = mutable.HashMap()
+  val committedOffsetMap: mutable.Map[GroupTopicPartition, OffsetAndMetadata] = mutable.HashMap()
+  val topicPartitionOffsetsMap: mutable.Map[TopicAndPartition, Long] = mutable.HashMap()
   val topicAndGroups: mutable.Set[TopicAndGroup] = mutable.HashSet()
+  val clients: mutable.Set[ClientGroup] = mutable.HashSet()
 
-  def startOffsetListener(consumerConnector: ConsumerConnector) = {
+  var tpOffsetGetterConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = null;
+
+  case class TopicAndGroup(topic: String, group: String)
+
+  case class ClientGroup(group: String, clientId: String, clientHost: String, topicPartitions: Set[TopicAndPartition])
+
+  private def createNewKafkaConsumer(args: OffsetGetterArgs, group: String): KafkaConsumer[Array[Byte], Array[Byte]] = {
+
+    val props: Properties = new Properties
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, args.kafkaBrokers)
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, group)
+    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000")
+    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+    props.put("security.protocol", args.kafkaSecurityProtocol)
+
+    new KafkaConsumer[Array[Byte], Array[Byte]](props)
+  }
+
+  private def createNewAdminClient(args: OffsetGetterArgs): AdminClient = {
+
+    val sleepAfterFailedAdminClientConnect: Int = 60000
+    var hasGoodAdminClient: Boolean = false
+    var adminClient: AdminClient = null
+
+    while (!hasGoodAdminClient) {
+
+      try {
+
+        info("Creating new Kafka AdminClient to get consumer and group info.");
+        val props: Properties = new Properties
+        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, args.kafkaBrokers)
+        props.put("security.protocol", args.kafkaSecurityProtocol)
+
+        adminClient = AdminClient.create(props)
+        hasGoodAdminClient = true
+      }
+
+      catch {
+
+        case e: Throwable =>
+          adminClient = null
+          hasGoodAdminClient = false
+          val errorMsg = "Error creating an AdminClient.  Will attempt to re-create in %d seconds".format(sleepAfterFailedAdminClientConnect)
+          error(errorMsg, e)
+          Thread.sleep(sleepAfterFailedAdminClientConnect)
+      }
+    }
+
+    adminClient
+  }
+
+  def startCommittedOffsetListener(args: OffsetGetterArgs) = {
+
+    var offsetConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = null;
+
+    if (null == offsetConsumer) {
+
+      logger.info("Creating new Kafka Client to get consumer group committed offsets")
+
+      val group: String = "kafka-offset-getter-client-" + System.currentTimeMillis
+      val consumerOffsetTopic = "__consumer_offsets"
+
+      offsetConsumer = createNewKafkaConsumer(args, group)
+      offsetConsumer.subscribe(Arrays.asList(consumerOffsetTopic))
+    }
 
     Future {
       try {
-        logger.info("Staring Kafka offset topic listener")
-        val offsetMsgStream: KafkaStream[Array[Byte], Array[Byte]] = consumerConnector
-          .createMessageStreams(Map(ConsumerOffsetTopic -> 1))
-          .get(ConsumerOffsetTopic).map(_.head) match {
-          case Some(s) => s
-          case None => throw new IllegalStateException("Cannot create a consumer stream on offset topic ")
-        }
 
-        val it = offsetMsgStream.iterator()
         while (true) {
-          try {
-            val offsetMsg: MessageAndMetadata[Array[Byte], Array[Byte]] = it.next()
-            val commitKey: GroupTopicPartition = readMessageKey(ByteBuffer.wrap(offsetMsg.key()))
-            val commitValue: OffsetAndMetadata = readMessageValue(ByteBuffer.wrap(offsetMsg.message()))
-            info("Processed commit message: " + commitKey + " => " + commitValue)
-            offsetMap += (commitKey -> commitValue)
-            topicAndGroups += TopicAndGroup(commitKey.topicPartition.topic, commitKey.group)
-          } catch {
-            case e: RuntimeException =>
-              // sometimes offsetMsg.key() || offsetMsg.message() throws NPE
-              warn("Failed to process one of the commit message due to exception. The 'bad' message will be skipped", e)
+
+          val records: ConsumerRecords[Array[Byte], Array[Byte]] = offsetConsumer.poll(100)
+
+          if (0 != records.count) {
+
+            val iter = records.iterator()
+
+            while (iter.hasNext()) {
+
+              val record: ConsumerRecord[Array[Byte], Array[Byte]] = iter.next()
+              val baseKey: BaseKey = GroupMetadataManager.readMessageKey(ByteBuffer.wrap(record.key))
+              baseKey match {
+
+                case b: OffsetKey =>
+                  val offsetAndMetadata: OffsetAndMetadata = GroupMetadataManager.readOffsetMessageValue(ByteBuffer.wrap(record.value))
+                  val gtp: GroupTopicPartition = b.key
+
+                  val existingCommittedOffsetMap: Option[OffsetAndMetadata] = committedOffsetMap.get(gtp)
+
+                  // Update only if the new message brings a change in offset
+                  if (!existingCommittedOffsetMap.isDefined || existingCommittedOffsetMap.get.offset != offsetAndMetadata.offset) {
+
+                    val group: String = gtp.group
+                    val topic: String = gtp.topicPartition.topic
+                    val partition: Long = gtp.topicPartition.partition
+                    val offset: Long = offsetAndMetadata.offset
+                    logger.info(s"Updating committed offset: g:$group,t:$topic,p:$partition: $offset")
+
+                    committedOffsetMap += (gtp -> offsetAndMetadata)
+                  }
+
+                case _ => // do nothing with these other messages
+              }
+            }
           }
         }
+
       } catch {
+
         case e: Throwable =>
-          fatal("Offset topic listener aborted dur to unexpected exception", e)
+          val errorMsg = String.format("The Kafka Client reading consumer group committed offsets has thrown an unhandled exception.")
+          fatal(errorMsg, e)
           System.exit(1)
       }
     }
   }
 
-  // massive code stealing from kafka.server.OffsetManager
+  // Retrieve ConsumerGroup, Consumer, Topic, and Partition information
+  def startAdminClient(args: OffsetGetterArgs) = {
 
-  import java.nio.ByteBuffer
+    val sleepOnException: Int = 60000
+    val sleepOnDataRetrieval: Int = 10000
 
-  import org.apache.kafka.common.protocol.types.Type.{INT32, INT64, STRING}
-  import org.apache.kafka.common.protocol.types.{Field, Schema, Struct}
+    Future {
 
+      while (true) {
 
-  private case class KeyAndValueSchemas(keySchema: Schema, valueSchema: Schema)
+        var adminClient: AdminClient = null
 
-  private val OFFSET_COMMIT_KEY_SCHEMA_V0 = new Schema(new Field("group", STRING),
-                                                       new Field("topic", STRING),
-                                                       new Field("partition", INT32))
-  private val KEY_GROUP_FIELD = OFFSET_COMMIT_KEY_SCHEMA_V0.get("group")
-  private val KEY_TOPIC_FIELD = OFFSET_COMMIT_KEY_SCHEMA_V0.get("topic")
-  private val KEY_PARTITION_FIELD = OFFSET_COMMIT_KEY_SCHEMA_V0.get("partition")
+        try {
 
-  private val OFFSET_COMMIT_VALUE_SCHEMA_V0 = new Schema(new Field("offset", INT64),
-                                                         new Field("metadata", STRING, "Associated metadata.", ""),
-                                                         new Field("timestamp", INT64))
+          adminClient = createNewAdminClient(args)
+          var hasError: Boolean = false
 
-  private val OFFSET_COMMIT_VALUE_SCHEMA_V1 = new Schema(new Field("offset", INT64),
-                                                         new Field("metadata", STRING, "Associated metadata.", ""),
-                                                         new Field("commit_timestamp", INT64),
-                                                         new Field("expire_timestamp", INT64))
+          while (!hasError) {
 
-  private val VALUE_OFFSET_FIELD_V0 = OFFSET_COMMIT_VALUE_SCHEMA_V0.get("offset")
-  private val VALUE_METADATA_FIELD_V0 = OFFSET_COMMIT_VALUE_SCHEMA_V0.get("metadata")
-  private val VALUE_TIMESTAMP_FIELD_V0 = OFFSET_COMMIT_VALUE_SCHEMA_V0.get("timestamp")
+            lazy val f = Future {
 
-  private val VALUE_OFFSET_FIELD_V1 = OFFSET_COMMIT_VALUE_SCHEMA_V1.get("offset")
-  private val VALUE_METADATA_FIELD_V1 = OFFSET_COMMIT_VALUE_SCHEMA_V1.get("metadata")
-  private val VALUE_COMMIT_TIMESTAMP_FIELD_V1 = OFFSET_COMMIT_VALUE_SCHEMA_V1.get("commit_timestamp")
-  // private val VALUE_EXPIRE_TIMESTAMP_FIELD_V1 = OFFSET_COMMIT_VALUE_SCHEMA_V1.get("expire_timestamp")
+              try {
 
-  // map of versions to schemas
-  private val OFFSET_SCHEMAS = Map(0 -> KeyAndValueSchemas(OFFSET_COMMIT_KEY_SCHEMA_V0, OFFSET_COMMIT_VALUE_SCHEMA_V0),
-                                   1 -> KeyAndValueSchemas(OFFSET_COMMIT_KEY_SCHEMA_V0, OFFSET_COMMIT_VALUE_SCHEMA_V1))
+                def groupOverviews = adminClient.listAllConsumerGroupsFlattened()
 
-  private def schemaFor(version: Int) = {
-    val schemaOpt = OFFSET_SCHEMAS.get(version)
-    schemaOpt match {
-      case Some(schema) => schema
-      case _ => throw new RuntimeException("Unknown offset schema version " + version)
-    }
-  }
+                groupOverviews.foreach((groupOverview: GroupOverview) => {
 
-  case class MessageValueStructAndVersion(value: Struct, version: Short)
+                  val groupId = groupOverview.groupId;
+                  val consumerGroupSummary = adminClient.describeConsumerGroup(groupId)
 
-  case class TopicAndGroup(topic: String, group: String)
+                  consumerGroupSummary.foreach((consumerSummary) => {
 
-  case class GroupTopicPartition(group: String, topicPartition: TopicAndPartition) {
+                    val clientId = consumerSummary.clientId
+                    val clientHost = consumerSummary.clientHost
 
-    def this(group: String, topic: String, partition: Int) =
-      this(group, new TopicAndPartition(topic, partition))
+                    val topicPartitions: List[TopicPartition] = consumerSummary.assignment
+                    var topicAndPartitions: mutable.Set[TopicAndPartition] = mutable.HashSet()
 
-    override def toString =
-      "[%s,%s,%d]".format(group, topicPartition.topic, topicPartition.partition)
-  }
+                    topicPartitions.foreach((topicPartition) => {
 
-  /**
-   * Decodes the offset messages' key
-   *
-   * @param buffer input byte-buffer
-   * @return an GroupTopicPartition object
-   */
-  private def readMessageKey(buffer: ByteBuffer): GroupTopicPartition = {
-    val version = buffer.getShort()
-    val keySchema = schemaFor(version).keySchema
-    val key = keySchema.read(buffer).asInstanceOf[Struct]
+                      val topic = topicPartition.topic()
+                      val partitionId = topicPartition.partition()
+                      val topicAndPartition: TopicAndPartition = TopicAndPartition(topic, partitionId)
 
-    val group = key.get(KEY_GROUP_FIELD).asInstanceOf[String]
-    val topic = key.get(KEY_TOPIC_FIELD).asInstanceOf[String]
-    val partition = key.get(KEY_PARTITION_FIELD).asInstanceOf[Int]
+                      topicAndGroups += TopicAndGroup(topic, groupId)
+                      topicAndPartitions += topicAndPartition
+                    })
 
-    GroupTopicPartition(group, TopicAndPartition(topic, partition))
-  }
+                    clients += ClientGroup(groupId, clientId, clientHost, topicAndPartitions)
+                  })
+                })
+              }
 
-  /**
-   * Decodes the offset messages' payload and retrieves offset and metadata from it
-   *
-   * @param buffer input byte-buffer
-   * @return an offset-metadata object from the message
-   */
-  private def readMessageValue(buffer: ByteBuffer): OffsetAndMetadata = {
-    val structAndVersion = readMessageValueStruct(buffer)
+              catch {
 
-    if (structAndVersion.value == null) { // tombstone
-      null
-    } else {
-      if (structAndVersion.version == 0) {
-        val offset = structAndVersion.value.get(VALUE_OFFSET_FIELD_V0).asInstanceOf[Long]
-        val metadata = structAndVersion.value.get(VALUE_METADATA_FIELD_V0).asInstanceOf[String]
-        val timestamp = structAndVersion.value.get(VALUE_TIMESTAMP_FIELD_V0).asInstanceOf[Long]
+                case e: Throwable =>
 
-        OffsetAndMetadata(offset, metadata, timestamp)
-      } else if (structAndVersion.version == 1) {
-        val offset = structAndVersion.value.get(VALUE_OFFSET_FIELD_V1).asInstanceOf[Long]
-        val metadata = structAndVersion.value.get(VALUE_METADATA_FIELD_V1).asInstanceOf[String]
-        val commitTimestamp = structAndVersion.value.get(VALUE_COMMIT_TIMESTAMP_FIELD_V1).asInstanceOf[Long]
-        // not supported in 0.8.2
-        // val expireTimestamp = structAndVersion.value.get(VALUE_EXPIRE_TIMESTAMP_FIELD_V1).asInstanceOf[Long]
+                  hasError = true
+                  if (null != adminClient) {
+                    adminClient.close()
+                  }
+                  val errorMsg: String = "Kafka AdminClient polling aborted due to unexpected exception."
+                  error(errorMsg, e)
+              }
+            }
 
-        OffsetAndMetadata(offset, metadata, commitTimestamp)
-      } else {
-        throw new IllegalStateException("Unknown offset message version: " + structAndVersion.version)
+            Await.result(f, duration.pairIntToDuration(30, duration.SECONDS))
+
+            if (hasError) {
+
+              Thread.sleep(sleepOnException)
+            } else {
+
+              Thread.sleep(sleepOnDataRetrieval)
+            }
+          }
+        }
+
+        catch {
+
+          case ex: java.util.concurrent.TimeoutException => {
+            error("The AdminClient timed out.  It will be closed and restarted.")
+            if (null != adminClient) {
+              adminClient.close()
+            }
+          }
+        }
       }
     }
   }
 
-  private def readMessageValueStruct(buffer: ByteBuffer): MessageValueStructAndVersion = {
-    if(buffer == null) { // tombstone
-      MessageValueStructAndVersion(null, -1)
-    } else {
-      val version = buffer.getShort()
-      val valueSchema = schemaFor(version).valueSchema
-      val value = valueSchema.read(buffer).asInstanceOf[Struct]
+  def startTopicPartitionOffsetGetter(args: OffsetGetterArgs) = {
 
-      MessageValueStructAndVersion(value, version)
+    Future {
+
+      try {
+
+        while (true) {
+
+          // Get list of distinct TopicAndPartitions
+          val distinctTopicPartitions: List[TopicAndPartition] = clients.flatMap(c => c.topicPartitions).toList.distinct
+
+          if (null == tpOffsetGetterConsumer) {
+
+            val group: String = "KafkaOffsetMonitor-TopicPartOffsetGetter-" + System.currentTimeMillis()
+            tpOffsetGetterConsumer = createNewKafkaConsumer(args, group)
+
+            // Do I need to assign to each topicPartition?
+          }
+
+          // Iterate over each distinct TopicPartition
+          distinctTopicPartitions.foreach(topicAndPartition => {
+
+            // Get the LogEndOffset for the TopicPartition
+            val topicPartition: TopicPartition = new TopicPartition(topicAndPartition.topic, topicAndPartition.partition)
+            tpOffsetGetterConsumer.assign(Arrays.asList(topicPartition))
+            tpOffsetGetterConsumer.seekToEnd(topicPartition)
+            val logEndOffset: Long = tpOffsetGetterConsumer.position(topicPartition)
+
+            // Update the TopicPartition map with the current LogEndOffset if it exists, else add a new map
+            if (topicPartitionOffsetsMap.contains(topicAndPartition)) {
+              topicPartitionOffsetsMap.update(topicAndPartition, logEndOffset)
+            }
+            else {
+              topicPartitionOffsetsMap += (topicAndPartition -> logEndOffset)
+            }
+          })
+        }
+
+      } catch {
+
+        case e: Throwable =>
+          val errorMsg = String.format("The Kafka Client reading topic/partition LogEndOffsets has thrown an unhandled exception.")
+          fatal(errorMsg, e)
+          System.exit(1)
+      }
     }
+
   }
 }

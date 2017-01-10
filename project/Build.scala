@@ -17,7 +17,7 @@ object KafkaUtilsBuild extends Build {
       "log4j" % "log4j" % "1.2.17",
       "org.scalatest" %% "scalatest" % "2.2.6" % "test",
       "org.mockito" % "mockito-all" % "1.10.19" % "test",
-      "org.apache.kafka" %% "kafka" % "0.8.2.1",
+      "org.apache.kafka" %% "kafka" % "0.9.0.1",
       "net.databinder" %% "unfiltered-filter" % "0.8.4",
       "net.databinder" %% "unfiltered-jetty" % "0.8.4",
       "net.databinder" %% "unfiltered-json4s" % "0.8.4",
