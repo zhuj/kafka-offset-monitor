@@ -1,6 +1,5 @@
 package com.quantifind.kafka
 
-import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import com.quantifind.kafka.OffsetGetter.{BrokerInfo, KafkaInfo, OffsetInfo}
@@ -8,9 +7,9 @@ import com.quantifind.kafka.core._
 import com.quantifind.kafka.offsetapp.OffsetGetterArgs
 import com.twitter.util.Time
 import kafka.common.BrokerNotAvailableException
-import kafka.consumer.{Consumer, ConsumerConfig, ConsumerConnector, SimpleConsumer}
+import kafka.consumer.{ConsumerConnector, SimpleConsumer}
 import kafka.utils.{Json, Logging, ZkUtils}
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.security.JaasUtils
 
 import scala.collection._
