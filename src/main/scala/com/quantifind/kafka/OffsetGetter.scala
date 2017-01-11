@@ -1,19 +1,23 @@
 package com.quantifind.kafka
 
-import java.util.concurrent.atomic.AtomicBoolean
-
-import com.quantifind.kafka.OffsetGetter.{BrokerInfo, KafkaInfo, OffsetInfo}
 import com.quantifind.kafka.core._
 import com.quantifind.kafka.offsetapp.OffsetGetterArgs
+import com.quantifind.kafka.OffsetGetter.{BrokerInfo, KafkaInfo, OffsetInfo}
+import com.quantifind.utils.ZkUtilsWrapper
 import com.twitter.util.Time
+
+import java.util.concurrent.atomic.AtomicBoolean
+
 import kafka.common.BrokerNotAvailableException
 import kafka.consumer.{ConsumerConnector, SimpleConsumer}
 import kafka.utils.{Json, Logging, ZkUtils}
+
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.security.JaasUtils
 
 import scala.collection._
 import scala.util.control.NonFatal
+
 
 case class Node(name: String, children: Seq[Node] = Seq())
 

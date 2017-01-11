@@ -3,15 +3,16 @@ package com.quantifind.kafka.core
 import com.quantifind.kafka.OffsetGetter
 import com.quantifind.kafka.OffsetGetter.OffsetInfo
 import com.quantifind.kafka.offsetapp.OffsetGetterArgs
+import com.twitter.util.Time
 
 import java.nio.ByteBuffer
 import java.util.{Arrays, Properties}
 
-import com.twitter.util.Time
 import kafka.admin.AdminClient
 import kafka.common.{OffsetAndMetadata, TopicAndPartition}
 import kafka.coordinator._
 import kafka.utils.{Logging, ZkUtils}
+
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, ConsumerRecords, KafkaConsumer}
 import org.apache.kafka.common.TopicPartition
