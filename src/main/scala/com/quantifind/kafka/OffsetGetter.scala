@@ -3,7 +3,6 @@ package com.quantifind.kafka
 import com.quantifind.kafka.core._
 import com.quantifind.kafka.offsetapp.OffsetGetterArgs
 import com.quantifind.kafka.OffsetGetter.{BrokerInfo, KafkaInfo, OffsetInfo}
-import com.quantifind.utils.ZkUtilsWrapper
 import com.twitter.util.Time
 
 import java.util.concurrent.atomic.AtomicBoolean
