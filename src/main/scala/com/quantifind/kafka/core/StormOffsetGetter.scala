@@ -2,10 +2,11 @@ package com.quantifind.kafka.core
 
 import com.quantifind.kafka.OffsetGetter
 import com.quantifind.kafka.OffsetGetter.OffsetInfo
+import com.quantifind.utils.ZkUtilsWrapper
 import com.twitter.util.Time
 import kafka.api.{OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.common.TopicAndPartition
-import kafka.utils.{Json, ZkUtils}
+import kafka.utils.{Json}
 import org.I0Itec.zkclient.exception.ZkNoNodeException
 import org.apache.zookeeper.data.Stat
 
@@ -15,7 +16,7 @@ import scala.util.control.NonFatal
 /**
  * a version that manages offsets saved by Storm Kafka Spout
  */
-class StormOffsetGetter(theZkUtils: ZkUtils, zkOffsetBase: String) extends OffsetGetter {
+class StormOffsetGetter(theZkUtils: ZkUtilsWrapper, zkOffsetBase: String) extends OffsetGetter {
 
   override val zkUtils = theZkUtils
 

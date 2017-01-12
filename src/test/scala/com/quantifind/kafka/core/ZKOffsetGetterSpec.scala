@@ -1,4 +1,3 @@
-/*
 package com.quantifind.kafka.core
 
 import com.quantifind.utils.ZkUtilsWrapper
@@ -12,10 +11,9 @@ class ZKOffsetGetterSpec extends FlatSpec with ShouldMatchers {
 
   trait Fixture {
 
-    val mockedZkClient = Mockito.mock(classOf[ZkClient])
     val mockedZkUtil =  Mockito.mock(classOf[ZkUtilsWrapper])
 
-    val offsetGetter = new ZKOffsetGetter(mockedZkClient, mockedZkUtil)
+    val offsetGetter = new ZKOffsetGetter(mockedZkUtil)
   }
 
   "ZKOffsetGetter" should "be able to fetch topic list" in new Fixture {
@@ -24,7 +22,7 @@ class ZKOffsetGetterSpec extends FlatSpec with ShouldMatchers {
     val testTopic1 = "testtopic1"
     val testTopic2 = "testtopic2"
 
-    when(mockedZkUtil.getChildren(MockitoMatchers.eq(mockedZkClient), anyString)).thenReturn(Seq(testTopic1, testTopic2))
+    when(mockedZkUtil.getChildren(anyString)).thenReturn(Seq(testTopic1, testTopic2))
 
     val topics = offsetGetter.getTopicList(testGroup)
     
@@ -38,7 +36,7 @@ class ZKOffsetGetterSpec extends FlatSpec with ShouldMatchers {
     val testGroup1 = "testgroup1"
     val testGroup2 = "testgroup2"
 
-    when(mockedZkUtil.getChildren(MockitoMatchers.eq(mockedZkClient), anyString)).thenReturn(Seq(testGroup1, testGroup2))
+    when(mockedZkUtil.getChildren(anyString)).thenReturn(Seq(testGroup1, testGroup2))
 
     val groups = offsetGetter.getGroups
 
@@ -47,4 +45,3 @@ class ZKOffsetGetterSpec extends FlatSpec with ShouldMatchers {
     groups(1) shouldBe testGroup2
   }
 }
-*/

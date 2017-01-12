@@ -1,13 +1,15 @@
 package com.quantifind.kafka.core
 
 import com.quantifind.kafka.OffsetGetter
-import OffsetGetter.OffsetInfo
+import com.quantifind.kafka.OffsetGetter.OffsetInfo
+import com.quantifind.utils.ZkUtilsWrapper
+
 import com.twitter.util.Time
 import kafka.api.{OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.common.TopicAndPartition
 import kafka.utils.ZkUtils
-import org.I0Itec.zkclient.exception.ZkNoNodeException
 import org.apache.zookeeper.data.Stat
+import org.I0Itec.zkclient.exception.ZkNoNodeException
 
 import scala.collection._
 import scala.util.control.NonFatal
@@ -17,7 +19,7 @@ import scala.util.control.NonFatal
  * User: pierre
  * Date: 1/22/14
  */
-class ZKOffsetGetter(theZkUtils: ZkUtils) extends OffsetGetter {
+class ZKOffsetGetter(theZkUtils: ZkUtilsWrapper) extends OffsetGetter {
 
   override val zkUtils = theZkUtils
 
