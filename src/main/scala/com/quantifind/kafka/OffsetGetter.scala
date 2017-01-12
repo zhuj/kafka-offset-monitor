@@ -3,6 +3,7 @@ package com.quantifind.kafka
 import com.quantifind.kafka.core._
 import com.quantifind.kafka.offsetapp.OffsetGetterArgs
 import com.quantifind.kafka.OffsetGetter.{BrokerInfo, KafkaInfo, OffsetInfo}
+import com.quantifind.utils.ZkUtilsWrapper
 import com.twitter.util.Time
 
 import java.util.concurrent.atomic.AtomicBoolean
@@ -21,11 +22,9 @@ import scala.util.control.NonFatal
 case class Node(name: String, children: Seq[Node] = Seq())
 
 case class TopicDetails(consumers: Seq[ConsumerDetail])
-
 case class TopicDetailsWrapper(consumers: TopicDetails)
 
 case class TopicAndConsumersDetails(active: Seq[KafkaInfo], inactive: Seq[KafkaInfo])
-
 case class TopicAndConsumersDetailsWrapper(consumers: TopicAndConsumersDetails)
 
 case class ConsumerDetail(name: String)
@@ -34,7 +33,7 @@ trait OffsetGetter extends Logging {
 
   val consumerMap: mutable.Map[Int, Option[SimpleConsumer]] = mutable.Map()
 
-  def zkUtils: ZkUtils
+  def zkUtils: ZkUtilsWrapper
 
   //  kind of interface methods
   def getTopicList(group: String): List[String]
@@ -217,7 +216,7 @@ object OffsetGetter {
   }
 
   val kafkaOffsetListenerStarted: AtomicBoolean = new AtomicBoolean(false)
-  var zkUtils: ZkUtils = null
+  var zkUtils: ZkUtilsWrapper = null
   var consumerConnector: ConsumerConnector = null
   var newKafkaConsumer: KafkaConsumer[String, String] = null
 
@@ -231,7 +230,7 @@ object OffsetGetter {
   def getInstance(args: OffsetGetterArgs): OffsetGetter = {
 
     if (kafkaOffsetListenerStarted.compareAndSet(false, true)) {
-      zkUtils = createZkUtils(args)
+      zkUtils = new ZkUtilsWrapper(createZkUtils(args))
 
       args.offsetStorage.toLowerCase match {
 
@@ -245,7 +244,7 @@ object OffsetGetter {
 
     args.offsetStorage.toLowerCase match {
       case "kafka" =>
-        new KafkaOffsetGetter(zkUtils, args)
+        new KafkaOffsetGetter(args)
       case "storm" =>
         new StormOffsetGetter(zkUtils, args.stormZKOffsetBase)
       case _ =>

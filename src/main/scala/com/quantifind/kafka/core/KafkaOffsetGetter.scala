@@ -25,11 +25,13 @@ import scala.concurrent.{Await, Future, duration}
 /**
   * Created by rcasey on 11/16/2016.
   */
-class KafkaOffsetGetter(theZkUtils: ZkUtils, args: OffsetGetterArgs) extends OffsetGetter {
+class KafkaOffsetGetter(args: OffsetGetterArgs) extends OffsetGetter {
 
   import KafkaOffsetGetter._
 
-  override val zkUtils = theZkUtils
+  // TODO: We will get all data from the Kafka broker in this class.  This is here simply to satisfy
+  // the OffsetGetter dependency until it can be refactored.
+  override val zkUtils = null
 
   override def processPartition(group: String, topic: String, pid: Int): Option[OffsetInfo] = {
 
@@ -47,8 +49,13 @@ class KafkaOffsetGetter(theZkUtils: ZkUtils, args: OffsetGetterArgs) extends Off
       val lag: Long = logEndOffset.get - committedOffset
       val logEndOffsetReported: Long = if (lag < 0) committedOffset - lag else logEndOffset.get
 
-      val client: Option[ClientGroup] = Option(clients.filter(c => (c.group == group && c.topicPartitions.contains(topicAndPartition))).head)
-      val clientString: Option[String] = if (client.isDefined) Option(client.get.clientId + client.get.clientHost) else Option("NA")
+      // Get client information if we can find an associated client
+      var clientString: Option[String] = Option("NA")
+      val filteredClients = clients.filter(c => (c.group == group && c.topicPartitions.contains(topicAndPartition)))
+      if (!filteredClients.isEmpty) {
+        val client: ClientGroup = filteredClients.head
+        clientString = Option(client.clientId + client.clientHost)
+      }
 
       OffsetInfo(group = group,
         topic = topic,
