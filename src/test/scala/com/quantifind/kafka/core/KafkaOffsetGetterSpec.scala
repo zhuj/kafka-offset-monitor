@@ -1,27 +1,27 @@
-/*
 package com.quantifind.kafka.core
 
+import com.quantifind.kafka.offsetapp.OffsetGetterArgs
 import kafka.api.{OffsetRequest, OffsetResponse, PartitionOffsetsResponse}
 import kafka.common.{OffsetAndMetadata, TopicAndPartition}
 import kafka.coordinator.GroupTopicPartition
 import kafka.consumer.SimpleConsumer
 import kafka.utils.ZkUtils
-import org.I0Itec.zkclient.ZkClient
 import org.mockito.Matchers._
 import org.mockito.Mockito._
-import org.mockito.{Matchers => MockitoMatchers, Mockito}
+import org.mockito.{Mockito, Matchers => MockitoMatchers}
 import org.scalatest._
 
 class KafkaOffsetGetterSpec extends FlatSpec with ShouldMatchers {
 
   trait Fixture {
 
-    val mockedZkClient = Mockito.mock(classOf[ZkClient])
     val mockedZkUtil =  Mockito.mock(classOf[ZkUtils])
     val mockedConsumer = Mockito.mock(classOf[SimpleConsumer])
     val testPartitionLeader = 1
 
-    val offsetGetter = new KafkaOffsetGetter(mockedZkUtil)
+    val args = new OffsetGetterArgs
+
+    val offsetGetter = new KafkaOffsetGetter(args)
     offsetGetter.consumerMap += (testPartitionLeader -> Some(mockedConsumer))
   }
 
@@ -30,16 +30,21 @@ class KafkaOffsetGetterSpec extends FlatSpec with ShouldMatchers {
     val testGroup = "testgroup"
     val testTopic = "testtopic"
     val testPartition = 1
+    val committedOffset = 100
+    val logEndOffset = 102
 
     val topicAndPartition = TopicAndPartition(testTopic, testPartition)
     val groupTopicPartition = GroupTopicPartition(testGroup, topicAndPartition)
-    val offsetAndMetadata = OffsetAndMetadata(100, "meta", System.currentTimeMillis)
+    val offsetAndMetadata = OffsetAndMetadata(committedOffset, "meta", System.currentTimeMillis)
     KafkaOffsetGetter.committedOffsetMap += (groupTopicPartition -> offsetAndMetadata)
 
-    when(mockedZkUtil.getLeaderForPartition(MockitoMatchers.eq(mockedZkClient), MockitoMatchers.eq(testTopic), MockitoMatchers.eq(testPartition)))
+    //topicPartitionOffsetsMap
+    KafkaOffsetGetter.topicPartitionOffsetsMap += (topicAndPartition -> logEndOffset)
+
+    when(mockedZkUtil.getLeaderForPartition(MockitoMatchers.eq(testTopic), MockitoMatchers.eq(testPartition)))
       .thenReturn(Some(testPartitionLeader))
 
-    val partitionErrorAndOffsets = Map(topicAndPartition -> PartitionOffsetsResponse(0,Seq(102)))
+    val partitionErrorAndOffsets = Map(topicAndPartition -> PartitionOffsetsResponse(0,Seq(logEndOffset)))
     val offsetResponse = OffsetResponse(1, partitionErrorAndOffsets)
     when(mockedConsumer.getOffsetsBefore(any[OffsetRequest])).thenReturn(offsetResponse)
 
@@ -48,11 +53,10 @@ class KafkaOffsetGetterSpec extends FlatSpec with ShouldMatchers {
         offsetInfo.topic shouldBe testTopic
         offsetInfo.group shouldBe testGroup
         offsetInfo.partition shouldBe testPartition
-        offsetInfo.offset shouldBe 100
-        offsetInfo.logSize shouldBe 102
+        offsetInfo.offset shouldBe committedOffset
+        offsetInfo.logSize shouldBe logEndOffset
       case None => fail("Failed to build offset data")
     }
     
   }
 }
-*/
