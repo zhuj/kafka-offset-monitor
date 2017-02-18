@@ -15,7 +15,7 @@ libraryDependencies ++= Seq(
   "com.quantifind" %% "sumac" % "0.3.0",
   "org.apache.kafka" %% "kafka" % "0.9.0.1",
   "org.reflections" % "reflections" % "0.9.10",
-  "com.twitter" % "util-core_2.11" % "6.40.0",
+  "com.twitter" %% "util-core" % "6.40.0",
   "com.typesafe.slick" %% "slick" % "2.1.0",
   "org.xerial" % "sqlite-jdbc" % "3.7.2",
   "org.mockito" % "mockito-all" % "1.10.19" % "test",

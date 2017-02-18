@@ -111,7 +111,7 @@ object OffsetGetterApp extends ArgMain[OffsetGetterArgsWGT] {
       }
 
     } finally {
-      if (og != null) og.close()
+
     }
   }
 }
