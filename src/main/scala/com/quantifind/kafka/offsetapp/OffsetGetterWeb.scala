@@ -87,7 +87,7 @@ object OffsetGetterWeb extends UnfilteredWebApp[OWArgs] with Logging {
       og = OffsetGetter.getInstance(args)
       f(og)
     } finally {
-      if (og != null) og.close()
+
     }
   }
 
