@@ -180,6 +180,7 @@ angular.module("offsetapp.directives", [])
 							}
 						},
 						yAxis: [{
+                            allowDecimals: false,
 							title: {
 								text: "Offset Position",
 								style: {
@@ -193,6 +194,7 @@ angular.module("offsetapp.directives", [])
 							},
 							opposite: false
 						},{
+                            allowDecimals: false,
 							title: {
 								text: "Lag",
 								style: {
