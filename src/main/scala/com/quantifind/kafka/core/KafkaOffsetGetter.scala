@@ -3,14 +3,13 @@ package com.quantifind.kafka.core
 import java.nio.{BufferUnderflowException, ByteBuffer}
 import java.util
 import java.util.concurrent.atomic.AtomicReference
-import java.util.{Arrays, Properties}
+import java.util.{Collections, Properties}
 
 import com.morningstar.kafka.KafkaCommittedOffset
 import com.morningstar.kafka.KafkaOffsetMetadata
 import com.morningstar.kafka.KafkaOffsetStorage
 import com.morningstar.kafka.KafkaTopicPartition
 import com.morningstar.kafka.KafkaTopicPartitionLogEndOffset
-
 import com.quantifind.kafka.OffsetGetter.OffsetInfo
 import com.quantifind.kafka.offsetapp.OffsetGetterArgs
 import com.quantifind.kafka.{Node, OffsetGetter}
@@ -18,7 +17,7 @@ import com.quantifind.utils.ZkUtilsWrapper
 import com.twitter.util.Time
 import kafka.admin.AdminClient
 import kafka.common.{KafkaException, OffsetAndMetadata, TopicAndPartition}
-import kafka.coordinator._
+import kafka.coordinator.group._
 import kafka.utils.Logging
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer._
@@ -38,20 +37,19 @@ class KafkaOffsetGetter(zkUtilsWrapper: ZkUtilsWrapper, args: OffsetGetterArgs) 
 
 	// TODO: We will get all data from the Kafka broker in this class.  This is here simply to satisfy
 	// the OffsetGetter dependency until it can be refactored.
-	override val zkUtils = zkUtilsWrapper
+	override val zkUtils: ZkUtilsWrapper = zkUtilsWrapper
 
 	override def processPartition(group: String, topic: String, partitionId: Int): Option[OffsetInfo] = {
 
 		val topicPartition = new TopicPartition(topic, partitionId)
-		val topicAndPartition = TopicAndPartition(topic, partitionId)
-		val optionalOffsetMetaData: Option[OffsetAndMetadata] = committedOffsetMap.get(GroupTopicPartition(group, topicAndPartition))
+		val optionalOffsetMetaData: Option[OffsetAndMetadata] = committedOffsetMap.get(GroupTopicPartition(group, topicPartition))
 
-		if (!optionalOffsetMetaData.isDefined) {
+		if (optionalOffsetMetaData.isEmpty) {
 			error(s"processPartition: Could not find group-topic-partition in committedOffsetsMap, g:$group,t:$topic,p:$partitionId")
 			return None
 		}
 
-		val offsetMetaData: OffsetAndMetadata = optionalOffsetMetaData.get;
+		val offsetMetaData: OffsetAndMetadata = optionalOffsetMetaData.get
 		val isActiveGroup: Boolean = isGroupActive(group)
 
 		kafkaOffsetStorage.addCommittedOffset(
@@ -70,7 +68,7 @@ class KafkaOffsetGetter(zkUtilsWrapper: ZkUtilsWrapper, args: OffsetGetterArgs) 
 			return None
 		}
 
-		val logEndOffset: Long = logEndOffsetsMap.get(topicPartition).getOrElse(-1)
+		val logEndOffset: Long = logEndOffsetsMap.getOrElse(topicPartition, -1)
 
 		if (logEndOffset == -1) {
 			info(s"processPartition: Not reporting this offset as we do not yet have logEndOffset to calc lag, g:$group,t:$topic,p:$partitionId")
@@ -87,7 +85,7 @@ class KafkaOffsetGetter(zkUtilsWrapper: ZkUtilsWrapper, args: OffsetGetterArgs) 
 
 		// Get client information if we can find an associated client
 		var clientString: Option[String] = Option("NA")
-		val filteredClient = clients.get().filter(c => (c.group == group && c.topicPartitions.contains(topicPartition))).headOption
+		val filteredClient = clients.get().find { c => c.group == group && c.topicPartitions.contains(topicPartition) }
 		if (filteredClient.isDefined) {
 			clientString = Option(filteredClient.get.clientId + filteredClient.get.clientHost)
 		}
@@ -117,7 +115,7 @@ class KafkaOffsetGetter(zkUtilsWrapper: ZkUtilsWrapper, args: OffsetGetterArgs) 
 
 	override def getTopicList(group: String): List[String] = {
 		committedOffsetMap.keySet
-			.filter(_.group.equals(group))
+			.filter(_.group == group)
 			.map(_.topicPartition.topic)
 			.toSeq
 			.toList
@@ -147,13 +145,13 @@ class KafkaOffsetGetter(zkUtilsWrapper: ZkUtilsWrapper, args: OffsetGetterArgs) 
 		for (topic: String <- activeTopicPartitionsMap.get().keys) {
 
 			var topicPartitionOffsetSet: Set[TopicPartitionLogEndOffset] = new mutable.HashSet[TopicPartitionLogEndOffset]
-			var sumLogEndOffset: Long = 0;
+			var sumLogEndOffset: Long = 0
 
 			val topicPartitionOffset: immutable.Map[TopicPartition, Long] = logEndOffsetsMap.filter(p => p._1.topic() == topic).toMap
 			for (topicPartition: TopicPartition <- topicPartitionOffset.keys.toSeq.sortWith(_.partition() > _.partition())) {
 
 				val partition: Int = topicPartition.partition()
-				val logEndOffset: Long = logEndOffsetsMap.get(topicPartition).getOrElse(0)
+				val logEndOffset: Long = logEndOffsetsMap.getOrElse(topicPartition, 0)
 
 				sumLogEndOffset += logEndOffset
 				topicPartitionOffsetSet += TopicPartitionLogEndOffset(topic, partition, logEndOffset)
@@ -175,15 +173,35 @@ class KafkaOffsetGetter(zkUtilsWrapper: ZkUtilsWrapper, args: OffsetGetterArgs) 
 	def isGroupActive(group: String): Boolean = getActiveGroups.exists(_.equals(group))
 
 	override def getConsumerGroupStatus: String = {
-		kafkaOffsetStorage.getConsumerGroups()
+		kafkaOffsetStorage.getConsumerGroups
 	}
+
+	override protected def processTopic(group: String, topic: String): Seq[OffsetInfo] = {
+		val zkPidMap = zkUtils.getPartitionsForTopics(Seq(topic))
+		val zkPartitions = zkPidMap.get(topic)
+
+		val partitions = zkPartitions.getOrElse {
+			committedOffsetMap
+				.keys
+				.filter { gtp => gtp.group.equals(group) && gtp.topicPartition.topic.equals(topic) }
+				.map { gtp => gtp.topicPartition.partition }
+				.toSeq
+		}
+
+		for {
+			pid <- partitions.sorted
+			info <- processPartition(group, topic, pid)
+		} yield info
+	}
+
+
 }
 
 object KafkaOffsetGetter extends Logging {
 
 	val committedOffsetMap: concurrent.Map[GroupTopicPartition, OffsetAndMetadata] = concurrent.TrieMap()
 	val logEndOffsetsMap: concurrent.Map[TopicPartition, Long] = concurrent.TrieMap()
-	val kafkaOffsetStorage: KafkaOffsetStorage = new KafkaOffsetStorage();
+	val kafkaOffsetStorage: KafkaOffsetStorage = new KafkaOffsetStorage()
 
 	// Swap the object on update
 	var activeTopicPartitions: AtomicReference[immutable.Set[TopicAndPartition]] = new AtomicReference(immutable.HashSet())
@@ -219,8 +237,7 @@ object KafkaOffsetGetter extends Logging {
 		while (null == adminClient) {
 
 			try {
-
-				info("Creating new Kafka AdminClient to get consumer and group info.");
+				info("Creating new Kafka AdminClient to get consumer and group info.")
 				adminClient = AdminClient.create(props)
 			}
 
@@ -257,7 +274,6 @@ object KafkaOffsetGetter extends Logging {
 		try {
 			// If the message has a null key, there is nothing that can be done
 			if (message.key == null) {
-
 				info("Ignoring message with a null key.")
 				return None
 			}
@@ -304,7 +320,7 @@ object KafkaOffsetGetter extends Logging {
 		}
 	}
 
-	def startCommittedOffsetListener(args: OffsetGetterArgs) = {
+	def startCommittedOffsetListener(args: OffsetGetterArgs): Unit = {
 
 		val group: String = "kafka-monitor-committedOffsetListener"
 		val consumerOffsetTopic = "__consumer_offsets"
@@ -320,23 +336,15 @@ object KafkaOffsetGetter extends Logging {
 					offsetConsumer = createNewKafkaConsumer(args, group, false)
 
 					offsetConsumer.subscribe(
-						Arrays.asList(consumerOffsetTopic),
+						Collections.singleton(consumerOffsetTopic),
 						new ConsumerRebalanceListener {
-							override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
-
+							override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
 								if (args.kafkaOffsetForceFromStart) {
-
-									val topicPartitionIterator = partitions.iterator()
-
-									while (topicPartitionIterator.hasNext()) {
-
-										val topicPartition: TopicPartition = topicPartitionIterator.next()
-										offsetConsumer.seekToBeginning(topicPartition)
-									}
+									offsetConsumer.seekToBeginning(partitions)
 								}
 							}
 
-							override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {
+							override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
 								/* Do nothing for now */
 							}
 						})
@@ -345,7 +353,7 @@ object KafkaOffsetGetter extends Logging {
 				val messages: ConsumerRecords[Array[Byte], Array[Byte]] = offsetConsumer.poll(500)
 				val messageIterator = messages.iterator()
 
-				while (messageIterator.hasNext()) {
+				while (messageIterator.hasNext) {
 
 					val message: ConsumerRecord[Array[Byte], Array[Byte]] = messageIterator.next()
 					val offsetMessage: Option[(GroupTopicPartition, OffsetAndMetadata)] = tryParseOffsetMessage(message)
@@ -362,7 +370,7 @@ object KafkaOffsetGetter extends Logging {
 
 						// Update committed offset only if the new message brings a change in offset for the topic-partition:
 						//   a changed offset for an existing topic-partition, or a new topic-partition
-						if (!existingCommittedOffsetMap.isDefined || existingCommittedOffsetMap.get.offset != offsetAndMetadata.offset) {
+						if (existingCommittedOffsetMap.isEmpty || existingCommittedOffsetMap.get.offset != offsetAndMetadata.offset) {
 
 							val group: String = gtp.group
 							val topic: String = gtp.topicPartition.topic
@@ -390,7 +398,7 @@ object KafkaOffsetGetter extends Logging {
 		}
 	}
 
-	def startAdminClient(args: OffsetGetterArgs) = {
+	def startAdminClient(args: OffsetGetterArgs): Unit = {
 
 		val sleepOnDataRetrieval: Int = 30000
 		val sleepOnError: Int = 60000
@@ -422,24 +430,25 @@ object KafkaOffsetGetter extends Logging {
 
 							groupOverviews.foreach((groupOverview: GroupOverview) => {
 
-								val groupId: String = groupOverview.groupId;
-								val consumerGroupSummary: List[AdminClient#ConsumerSummary] = adminClient.describeConsumerGroup(groupId)
+								val groupId: String = groupOverview.groupId
+								val consumerGroupSummary = adminClient.describeConsumerGroup(groupId)
+								for (consumers <- consumerGroupSummary.consumers) {
+									consumers.foreach((consumerSummary) => {
 
-								consumerGroupSummary.foreach((consumerSummary) => {
+										val clientId: String = consumerSummary.clientId
+										val clientHost: String = consumerSummary.host
 
-									val clientId: String = consumerSummary.clientId
-									val clientHost: String = consumerSummary.clientHost
+										val topicPartitions: List[TopicPartition] = consumerSummary.assignment
 
-									val topicPartitions: List[TopicPartition] = consumerSummary.assignment
+										topicPartitions.foreach((topicPartition) => {
 
-									topicPartitions.foreach((topicPartition) => {
+											newActiveTopicPartitions += TopicAndPartition(topicPartition.topic(), topicPartition.partition())
+											newTopicAndGroups += TopicAndGroup(topicPartition.topic(), groupId)
+										})
 
-										newActiveTopicPartitions += TopicAndPartition(topicPartition.topic(), topicPartition.partition())
-										newTopicAndGroups += TopicAndGroup(topicPartition.topic(), groupId)
+										newClients += ClientGroup(groupId, clientId, clientHost, topicPartitions.toSet)
 									})
-
-									newClients += ClientGroup(groupId, clientId, clientHost, topicPartitions.toSet)
-								})
+								}
 							})
 
 							activeTopicPartitions.set(newActiveTopicPartitions.toSet)
@@ -485,7 +494,7 @@ object KafkaOffsetGetter extends Logging {
 		}
 	}
 
-	def startLogEndOffsetGetter(args: OffsetGetterArgs) = {
+	def startLogEndOffsetGetter(args: OffsetGetterArgs): Unit = {
 
 		val sleepOnDataRetrieval: Int = 10000
 		val sleepOnError: Int = 30000
@@ -503,22 +512,27 @@ object KafkaOffsetGetter extends Logging {
 
 				// Get topic-partitions
 				activeTopicPartitionsMap.set(JavaConversions.mapAsScalaMap(logEndOffsetGetter.listTopics()).toMap)
-				val distinctPartitionInfo: Seq[PartitionInfo] = (activeTopicPartitionsMap.get().values).flatten(listPartitionInfo => JavaConversions.asScalaBuffer(listPartitionInfo)).toSeq
+				val distinctPartitionInfo: Seq[PartitionInfo] = activeTopicPartitionsMap.get().values
+					.flatten { listPartitionInfo => JavaConversions.asScalaBuffer(listPartitionInfo) }
+					.toSeq
 
 				// Iterate over each distinct PartitionInfo
 				distinctPartitionInfo.foreach(partitionInfo => {
 
 					// Get the LogEndOffset for the TopicPartition
 					val topicPartition: TopicPartition = new TopicPartition(partitionInfo.topic, partitionInfo.partition)
-					logEndOffsetGetter.assign(Arrays.asList(topicPartition))
-					logEndOffsetGetter.seekToEnd(topicPartition)
+					val topicPartitionAsList = Collections.singleton(topicPartition)
+					logEndOffsetGetter.assign(topicPartitionAsList)
+					logEndOffsetGetter.seekToEnd(topicPartitionAsList)
 					val logEndOffset: Long = logEndOffsetGetter.position(topicPartition)
 
 					// Update KafkaOffsetStorage
 					kafkaOffsetStorage.addLogEndOffset(
 						new KafkaTopicPartitionLogEndOffset(
 							new KafkaTopicPartition(partitionInfo.topic, partitionInfo.partition),
-							new KafkaOffsetMetadata(logEndOffset, System.currentTimeMillis())));
+							new KafkaOffsetMetadata(logEndOffset, System.currentTimeMillis())
+						)
+					)
 
 					// Update the TopicPartition map with the current LogEndOffset if it exists, else add a new entry to the map
 					if (logEndOffsetsMap.contains(topicPartition)) {
@@ -557,28 +571,19 @@ case class ClientGroup(group: String, clientId: String, clientHost: String, topi
 
 case class TopicPartitionLogEndOffset(topic: String, partition: Int, logEndOffset: Long) extends Ordered [TopicPartitionLogEndOffset] {
 
-	def compare (that: TopicPartitionLogEndOffset) = {
+	override def compare(that: TopicPartitionLogEndOffset): Int = {
 		if (this.topic == that.topic) {
-			if (this.partition > that.partition)
-				1
-			else if (this.partition < that.partition)
-				-1
-			else
-				0
+			Integer.compare(this.partition, that.partition)
+		} else {
+			this.topic.compareTo(that.topic)
 		}
-		else if (this.topic > that.topic)
-			1
-		else
-			-1
 	}
 }
 
 case class TopicLogEndOffsetInfo(topic: String, sumLogEndOffset: Long, partitions: Seq[TopicPartitionLogEndOffset]) extends Ordered[TopicLogEndOffsetInfo] {
 
-	def compare (that:TopicLogEndOffsetInfo) = {
-		if (this.topic == that.topic) 0
-		else if (this.topic > that.topic) 1
-		else -1
+	override def compare(that:TopicLogEndOffsetInfo): Int = {
+		this.topic.compareTo(that.topic)
 	}
 }
 
