@@ -1,18 +1,16 @@
 package com.quantifind.kafka.core
 
 import com.quantifind.kafka.offsetapp.OffsetGetterArgs
-import com.quantifind.utils.ZkUtilsWrapper
-import java.nio.{BufferUnderflowException, ByteBuffer}
-
 import kafka.api.{OffsetRequest, OffsetResponse, PartitionOffsetsResponse}
 import kafka.common.{OffsetAndMetadata, OffsetMetadata, TopicAndPartition}
-import kafka.coordinator._
 import kafka.consumer.SimpleConsumer
+import kafka.coordinator.group.GroupTopicPartition
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.Errors
 import org.mockito.Matchers._
+import org.mockito.Mockito
 import org.mockito.Mockito._
-import org.mockito.{Mockito, Matchers => MockitoMatchers}
 import org.scalatest._
 
 
@@ -20,13 +18,12 @@ class KafkaOffsetGetterSpec extends FlatSpec with ShouldMatchers {
 
   trait Fixture {
 
-		val mockedZkUtil: ZkUtilsWrapper =  Mockito.mock(classOf[ZkUtilsWrapper])
 		val mockedConsumer: SimpleConsumer = Mockito.mock(classOf[SimpleConsumer])
     val testPartitionLeader = 1
 
     val args = new OffsetGetterArgs
 
-		val offsetGetter: KafkaOffsetGetter = new KafkaOffsetGetter(mockedZkUtil, args)
+		val offsetGetter: KafkaOffsetGetter = new KafkaOffsetGetter(args)
     offsetGetter.consumerMap += (testPartitionLeader -> Some(mockedConsumer))
 		val offsetGetterSpy: KafkaOffsetGetter = spy(offsetGetter)
 
@@ -42,16 +39,13 @@ class KafkaOffsetGetterSpec extends FlatSpec with ShouldMatchers {
 
     val topicAndPartition = TopicAndPartition(testTopic, testPartition)
     val topicPartition = new TopicPartition(testTopic, testPartition)
-    val groupTopicPartition = GroupTopicPartition(testGroup, TopicAndPartition(testTopic, testPartition))
+    val groupTopicPartition = GroupTopicPartition(testGroup, topicPartition)
     val offsetAndMetadata = OffsetAndMetadata(committedOffset, "meta", System.currentTimeMillis)
 
     KafkaOffsetGetter.committedOffsetMap += (groupTopicPartition -> offsetAndMetadata)
     KafkaOffsetGetter.logEndOffsetsMap += (topicPartition -> logEndOffset)
 
-    when(mockedZkUtil.getLeaderForPartition(MockitoMatchers.eq(testTopic), MockitoMatchers.eq(testPartition)))
-        .thenReturn(Some(testPartitionLeader))
-
-    val partitionErrorAndOffsets = Map(topicAndPartition -> PartitionOffsetsResponse(0, Seq(logEndOffset)))
+    val partitionErrorAndOffsets = Map(topicAndPartition -> PartitionOffsetsResponse(Errors.NONE, Seq(logEndOffset)))
     val offsetResponse = OffsetResponse(1, partitionErrorAndOffsets)
     when(mockedConsumer.getOffsetsBefore(any[OffsetRequest])).thenReturn(offsetResponse)
 		when(offsetGetterSpy.isGroupActive(any[String])).thenReturn(true)

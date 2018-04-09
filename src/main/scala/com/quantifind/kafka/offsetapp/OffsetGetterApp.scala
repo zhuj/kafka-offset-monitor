@@ -1,21 +1,11 @@
 package com.quantifind.kafka.offsetapp
 
 import java.text.NumberFormat
-import java.util.Properties
 
 import com.quantifind.kafka.OffsetGetter
-import com.quantifind.kafka.core.ZKOffsetGetter
-import kafka.consumer.{ConsumerConnector, ConsumerConfig, Consumer}
-import kafka.utils.ZKStringSerializer
-
-
-import com.quantifind.sumac.{ArgMain, FieldArgs}
 import com.quantifind.sumac.validation.Required
 import com.quantifind.sumac.{ArgMain, FieldArgs}
 
-import kafka.utils.ZkUtils
-import org.I0Itec.zkclient.ZkClient
-import scala.concurrent.duration._
 import scala.language.postfixOps
 
 
@@ -35,22 +25,12 @@ class OffsetGetterArgsWGT extends OffsetGetterArgs {
 
 class OffsetGetterArgs extends FieldArgs {
 
-  var offsetStorage: String = "zookeeper"
-
   var kafkaOffsetForceFromStart = false
-
-  var stormZKOffsetBase = "/stormconsumers"
 
   var kafkaBrokers: String = _
 
   var kafkaSecurityProtocol = "PLAINTEXT"
 
-  @Required
-  var zk: String = _
-
-  var zkSessionTimeout: Duration = 30 seconds
-
-  var zkConnectionTimeout: Duration = 30 seconds
 }
 
 /**
